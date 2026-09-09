@@ -9,6 +9,11 @@ const AllApplications = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [deleting, setDeleting] = useState(false);
+  
+  // ===== VIEW MODAL STATE =====
+  const [showModal, setShowModal] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [modalLoading, setModalLoading] = useState(false);
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('user'));
@@ -30,30 +35,49 @@ const AllApplications = () => {
     }
   };
 
-  // ========== DROP FUNCTION ==========
+  // ===== VIEW FUNCTION - FIXED =====
+  const handleView = async (applicationId, name) => {
+    console.log('🔍 View clicked for application ID:', applicationId);
+    
+    if (!applicationId) {
+      alert('Error: No application ID found');
+      return;
+    }
+
+    setModalLoading(true);
+    setShowModal(true);
+    try {
+      // Use the registrar/application endpoint
+      const response = await API.get(`/registrar/application/${applicationId}`);
+      console.log('📋 Application data loaded:', response.data);
+      setSelectedStudent(response.data);
+    } catch (error) {
+      console.error('❌ Error fetching student details:', error);
+      alert('Failed to load student details. Please try again.');
+      setShowModal(false);
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  // ===== DROP FUNCTION =====
   const handleDrop = async (applicationId, studentId, name) => {
     if (!window.confirm(`⚠️ WARNING: You are about to DROP the enrollment record of ${name}.\n\nThis will permanently delete:\n- Student information\n- Application records\n- User account\n- All related data\n\nThis action CANNOT be undone!\n\nAre you sure you want to continue?`)) {
       return;
     }
 
-    // Second confirmation for safety
     if (!window.confirm(`🔴 FINAL CONFIRMATION: Drop ${name}?`)) {
       return;
     }
 
     setDeleting(true);
     try {
-      // Delete user account first
       await API.delete(`/admin/user/${studentId}`);
-      
-      // Delete application
       await API.delete(`/admin/application/${applicationId}`);
-      
-      // Delete student
       await API.delete(`/admin/student/${studentId}`);
       
       alert(`✅ Successfully dropped ${name}'s enrollment record.`);
-      fetchApplications(); // Refresh the list
+      fetchApplications();
     } catch (error) {
       console.error('Error dropping record:', error);
       alert('❌ Failed to drop record. Please try again.');
@@ -240,7 +264,7 @@ const AllApplications = () => {
                     <th style={{ padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#374151' }}>Status</th>
                     <th style={{ padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#374151' }}>Date</th>
                     <th style={{ padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#374151' }}>Registrar</th>
-                    <th style={{ padding: '12px', textAlign: 'center', fontSize: '13px', fontWeight: '600', color: '#374151' }}>Action</th>
+                    <th style={{ padding: '12px', textAlign: 'center', fontSize: '13px', fontWeight: '600', color: '#374151' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -267,22 +291,40 @@ const AllApplications = () => {
                         {app.registrar_name || 'N/A'}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'center' }}>
-                        <button
-                          onClick={() => handleDrop(app.application_id, app.student_id, `${app.first_name} ${app.last_name}`)}
-                          disabled={deleting}
-                          style={{
-                            background: '#dc2626',
-                            color: 'white',
-                            border: 'none',
-                            padding: '6px 16px',
-                            borderRadius: '6px',
-                            cursor: deleting ? 'not-allowed' : 'pointer',
-                            fontSize: '12px',
-                            fontWeight: '600'
-                          }}
-                        >
-                          🗑️ Drop
-                        </button>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                          {/* ===== VIEW BUTTON - FIXED: Use application_id ===== */}
+                          <button
+                            onClick={() => handleView(app.application_id, `${app.first_name} ${app.last_name}`)}
+                            style={{
+                              background: '#1a56db',
+                              color: 'white',
+                              border: 'none',
+                              padding: '6px 14px',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              fontWeight: '600'
+                            }}
+                          >
+                            👁️ View
+                          </button>
+                          <button
+                            onClick={() => handleDrop(app.application_id, app.student_id, `${app.first_name} ${app.last_name}`)}
+                            disabled={deleting}
+                            style={{
+                              background: '#dc2626',
+                              color: 'white',
+                              border: 'none',
+                              padding: '6px 14px',
+                              borderRadius: '6px',
+                              cursor: deleting ? 'not-allowed' : 'pointer',
+                              fontSize: '12px',
+                              fontWeight: '600'
+                            }}
+                          >
+                            🗑️ Drop
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -292,6 +334,182 @@ const AllApplications = () => {
           )}
         </div>
       </div>
+
+      {/* ============================================================ */}
+      {/* ===== VIEW MODAL - UPDATED ===== */}
+      {/* ============================================================ */}
+      {showModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 9999,
+          padding: '20px',
+          overflow: 'auto'
+        }} onClick={() => setShowModal(false)}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            maxWidth: '900px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflow: 'auto',
+            padding: '32px',
+            position: 'relative',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+          }} onClick={(e) => e.stopPropagation()}>
+            
+            {/* Close Button */}
+            <button
+              onClick={() => setShowModal(false)}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '20px',
+                background: 'none',
+                border: 'none',
+                fontSize: '28px',
+                cursor: 'pointer',
+                color: '#6b7280'
+              }}
+            >
+              ✕
+            </button>
+
+            {modalLoading ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
+                ⏳ Loading student details...
+              </div>
+            ) : selectedStudent ? (
+              <>
+                {/* Header */}
+                <div style={{ marginBottom: '24px', borderBottom: '2px solid #e5e7eb', paddingBottom: '16px' }}>
+                  <h2 style={{ fontSize: '24px', color: '#1f2937', margin: 0 }}>
+                    👤 Student Information
+                  </h2>
+                  <p style={{ color: '#6b7280', marginTop: '4px' }}>
+                    Student ID: <strong>{selectedStudent.student_id || 'Not yet assigned'}</strong>
+                  </p>
+                </div>
+
+                {/* Two Column Layout */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                  {/* LEFT COLUMN - Personal Info */}
+                  <div>
+                    <h3 style={{ fontSize: '16px', color: '#1a56db', marginBottom: '12px' }}>📋 Personal Information</h3>
+                    <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px' }}>
+                      <p><strong>Name:</strong> {selectedStudent.first_name} {selectedStudent.middle_name || ''} {selectedStudent.last_name} {selectedStudent.suffix || ''}</p>
+                      <p><strong>Birth Date:</strong> {selectedStudent.birth_date ? new Date(selectedStudent.birth_date).toLocaleDateString() : 'N/A'}</p>
+                      <p><strong>Gender:</strong> {selectedStudent.gender || 'N/A'}</p>
+                      <p><strong>Address:</strong> {selectedStudent.address || 'N/A'}</p>
+                      <p><strong>Contact:</strong> {selectedStudent.contact_number || 'N/A'}</p>
+                      <p><strong>Email:</strong> {selectedStudent.email || 'N/A'}</p>
+                    </div>
+
+                    {/* Parent/Guardian */}
+                    <h3 style={{ fontSize: '16px', color: '#1a56db', marginTop: '16px', marginBottom: '12px' }}>👨‍👩‍👦 Parent/Guardian</h3>
+                    <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px' }}>
+                      <p><strong>Father:</strong> {selectedStudent.father_name || 'N/A'}</p>
+                      <p><strong>Father's Occupation:</strong> {selectedStudent.father_occupation || 'N/A'}</p>
+                      <p><strong>Father's Contact:</strong> {selectedStudent.father_contact || 'N/A'}</p>
+                      <hr style={{ margin: '8px 0' }} />
+                      <p><strong>Mother:</strong> {selectedStudent.mother_name || 'N/A'}</p>
+                      <p><strong>Mother's Occupation:</strong> {selectedStudent.mother_occupation || 'N/A'}</p>
+                      <p><strong>Mother's Contact:</strong> {selectedStudent.mother_contact || 'N/A'}</p>
+                      <hr style={{ margin: '8px 0' }} />
+                      <p><strong>Guardian:</strong> {selectedStudent.guardian_name || 'N/A'}</p>
+                      <p><strong>Guardian's Contact:</strong> {selectedStudent.guardian_contact || 'N/A'}</p>
+                    </div>
+                  </div>
+
+                  {/* RIGHT COLUMN - Application & Documents */}
+                  <div>
+                    <h3 style={{ fontSize: '16px', color: '#1a56db', marginBottom: '12px' }}>📄 Application Details</h3>
+                    <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px' }}>
+                      <p><strong>Academic Year:</strong> {selectedStudent.academic_year || 'N/A'}</p>
+                      <p><strong>Status:</strong> 
+                        <span style={{ 
+                          ...statusBadge(selectedStudent.status),
+                          marginLeft: '8px'
+                        }}>
+                          {selectedStudent.status ? selectedStudent.status.charAt(0).toUpperCase() + selectedStudent.status.slice(1) : 'N/A'}
+                        </span>
+                      </p>
+                      <p><strong>Date Applied:</strong> {selectedStudent.created_at ? new Date(selectedStudent.created_at).toLocaleDateString() : 'N/A'}</p>
+                      <p><strong>Registrar:</strong> {selectedStudent.registrar_first_name || 'N/A'} {selectedStudent.registrar_last_name || ''}</p>
+                      <p><strong>Registrar Remarks:</strong> {selectedStudent.registrar_remarks || 'N/A'}</p>
+                      <p><strong>Admin:</strong> {selectedStudent.admin_first_name || 'N/A'} {selectedStudent.admin_last_name || ''}</p>
+                      <p><strong>Admin Remarks:</strong> {selectedStudent.admin_remarks || 'N/A'}</p>
+                    </div>
+
+                    {/* Requirements */}
+                    <h3 style={{ fontSize: '16px', color: '#1a56db', marginTop: '16px', marginBottom: '12px' }}>📎 Requirements</h3>
+                    <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px' }}>
+                      {selectedStudent.birth_certificate ? (
+                        <p><a href={`http://localhost:5000/uploads/requirements/${selectedStudent.birth_certificate}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>📄 Birth Certificate</a></p>
+                      ) : <p>📄 Birth Certificate: <span style={{ color: '#6b7280' }}>Not uploaded</span></p>}
+                      
+                      {selectedStudent.immunization_record ? (
+                        <p><a href={`http://localhost:5000/uploads/requirements/${selectedStudent.immunization_record}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>📄 Immunization Record</a></p>
+                      ) : <p>📄 Immunization Record: <span style={{ color: '#6b7280' }}>Not uploaded</span></p>}
+                      
+                      {selectedStudent.medical_clearance ? (
+                        <p><a href={`http://localhost:5000/uploads/requirements/${selectedStudent.medical_clearance}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>📄 Medical Clearance</a></p>
+                      ) : <p>📄 Medical Clearance: <span style={{ color: '#6b7280' }}>Not uploaded</span></p>}
+                      
+                      {selectedStudent.id_picture ? (
+                        <p><a href={`http://localhost:5000/uploads/requirements/${selectedStudent.id_picture}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>🖼️ ID Picture</a></p>
+                      ) : <p>🖼️ ID Picture: <span style={{ color: '#6b7280' }}>Not uploaded</span></p>}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer Buttons */}
+                <div style={{ marginTop: '24px', borderTop: '2px solid #e5e7eb', paddingTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                  <button
+                    onClick={() => setShowModal(false)}
+                    style={{
+                      background: '#6b7280',
+                      color: 'white',
+                      border: 'none',
+                      padding: '10px 24px',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '14px'
+                    }}
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={() => window.print()}
+                    style={{
+                      background: '#1a56db',
+                      color: 'white',
+                      border: 'none',
+                      padding: '10px 24px',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '14px'
+                    }}
+                  >
+                    🖨️ Print
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
+                No data found.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -22,6 +22,13 @@ const RegistrarDashboard = () => {
   const [activeMenu, setActiveMenu] = useState('applications');
   const itemsPerPage = 5;
 
+  // ===== EDIT MODAL STATES =====
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editData, setEditData] = useState(null);
+  const [editLoading, setEditLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editMessage, setEditMessage] = useState('');
+
   // Add Application States
   const [showAddModal, setShowAddModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -194,6 +201,72 @@ const RegistrarDashboard = () => {
   const viewApplication = (app) => {
     setSelectedApp(app);
     setShowModal(true);
+  };
+
+  // ===== EDIT FUNCTIONS =====
+  const handleEdit = async (applicationId) => {
+    setEditLoading(true);
+    setShowEditModal(true);
+    setEditMessage('');
+    try {
+      const response = await API.get(`/registrar/application/${applicationId}`);
+      setEditData(response.data);
+    } catch (error) {
+      console.error('❌ Error fetching application:', error);
+      setEditMessage('❌ Failed to load application details');
+      setShowEditModal(false);
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    setEditData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSaveEdit = async () => {
+    setSaving(true);
+    setEditMessage('');
+    try {
+      await API.put(`/registrar/application/${editData.id}`, {
+        first_name: editData.first_name,
+        middle_name: editData.middle_name,
+        last_name: editData.last_name,
+        suffix: editData.suffix,
+        birth_date: editData.birth_date,
+        gender: editData.gender,
+        address: editData.address,
+        contact_number: editData.contact_number,
+        email: editData.email,
+        father_name: editData.father_name,
+        father_occupation: editData.father_occupation,
+        father_contact: editData.father_contact,
+        mother_name: editData.mother_name,
+        mother_occupation: editData.mother_occupation,
+        mother_contact: editData.mother_contact,
+        guardian_name: editData.guardian_name,
+        guardian_contact: editData.guardian_contact,
+        academic_year: editData.academic_year,
+        registrar_remarks: editData.registrar_remarks
+      });
+      
+      setEditMessage('✅ Application updated successfully!');
+      setTimeout(() => {
+        setShowEditModal(false);
+        setEditData(null);
+        setEditMessage('');
+        fetchApplications();
+      }, 1500);
+    } catch (error) {
+      console.error('❌ Error saving:', error);
+      setEditMessage('❌ Failed to update application. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ========== ADD APPLICATION FUNCTIONS ==========
@@ -530,7 +603,7 @@ const RegistrarDashboard = () => {
                   <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Contact</th>
                   <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Status</th>
                   <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Date</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Actions</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -553,66 +626,32 @@ const RegistrarDashboard = () => {
                       {new Date(app.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                      {/* View Button ONLY */}
                       <button
                         onClick={() => viewApplication(app)}
                         style={{
                           background: '#dbeafe',
                           color: '#1a56db',
                           border: 'none',
-                          padding: '6px 12px',
+                          padding: '6px 16px',
                           borderRadius: '6px',
                           cursor: 'pointer',
-                          fontSize: '12px',
+                          fontSize: '13px',
                           fontWeight: '500',
-                          marginRight: '6px',
-                          transition: 'all 0.2s ease'
+                          transition: 'all 0.2s ease',
+                          width: '80px'
                         }}
-                        onMouseEnter={(e) => e.target.style.background = '#bfdbfe'}
-                        onMouseLeave={(e) => e.target.style.background = '#dbeafe'}
+                        onMouseEnter={(e) => {
+                          e.target.style.background = '#bfdbfe';
+                          e.target.style.transform = 'scale(1.05)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.target.style.background = '#dbeafe';
+                          e.target.style.transform = 'scale(1)';
+                        }}
                       >
-                        View
+                        👁️ View
                       </button>
-                      {app.status === 'pending' && (
-                        <>
-                          <button
-                            onClick={() => handleApprove(app.application_id)}
-                            style={{
-                              background: '#d1fae5',
-                              color: '#065f46',
-                              border: 'none',
-                              padding: '6px 12px',
-                              borderRadius: '6px',
-                              cursor: 'pointer',
-                              fontSize: '12px',
-                              fontWeight: '500',
-                              marginRight: '6px',
-                              transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => e.target.style.background = '#a7f3d0'}
-                            onMouseLeave={(e) => e.target.style.background = '#d1fae5'}
-                          >
-                            ✅ Approve
-                          </button>
-                          <button
-                            onClick={() => handleDecline(app.application_id)}
-                            style={{
-                              background: '#fee2e2',
-                              color: '#991b1b',
-                              border: 'none',
-                              padding: '6px 12px',
-                              borderRadius: '6px',
-                              cursor: 'pointer',
-                              fontSize: '12px',
-                              fontWeight: '500',
-                              transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => e.target.style.background = '#fecaca'}
-                            onMouseLeave={(e) => e.target.style.background = '#fee2e2'}
-                          >
-                            ❌ Decline
-                          </button>
-                        </>
-                      )}
                     </td>
                   </tr>
                 ))}
@@ -1193,7 +1232,7 @@ const RegistrarDashboard = () => {
         </div>
       </div>
 
-      {/* View Application Modal */}
+      {/* ========== VIEW APPLICATION MODAL (With Approve, Decline, Edit inside) ========== */}
       {showModal && selectedApp && (
         <div style={{
           position: 'fixed',
@@ -1287,12 +1326,45 @@ const RegistrarDashboard = () => {
               />
             </div>
 
-            <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '20px', flexWrap: 'wrap' }}>
+              {/* Edit Button */}
+              <button
+                onClick={() => {
+                  setShowModal(false);
+                  handleEdit(selectedApp.application_id);
+                }}
+                style={{
+                  flex: 1,
+                  minWidth: '80px',
+                  background: 'linear-gradient(135deg, #f59e0b, #fbbf24)',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px',
+                  borderRadius: '10px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 15px rgba(245,158,11,0.3)',
+                  transition: 'all 0.3s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.transform = 'translateY(-2px)';
+                  e.target.style.boxShadow = '0 8px 25px rgba(245,158,11,0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = '0 4px 15px rgba(245,158,11,0.3)';
+                }}
+              >
+                ✏️ Edit
+              </button>
+
+              {/* Approve Button */}
               <button
                 onClick={() => handleApprove(selectedApp.application_id)}
                 disabled={actionLoading}
                 style={{
                   flex: 1,
+                  minWidth: '80px',
                   background: actionLoading ? '#93c5fd' : 'linear-gradient(135deg, #10b981, #34d399)',
                   color: 'white',
                   border: 'none',
@@ -1316,11 +1388,14 @@ const RegistrarDashboard = () => {
               >
                 ✅ Approve
               </button>
+
+              {/* Decline Button */}
               <button
                 onClick={() => handleDecline(selectedApp.application_id)}
                 disabled={actionLoading}
                 style={{
                   flex: 1,
+                  minWidth: '80px',
                   background: actionLoading ? '#93c5fd' : 'linear-gradient(135deg, #ef4444, #f87171)',
                   color: 'white',
                   border: 'none',
@@ -1345,6 +1420,346 @@ const RegistrarDashboard = () => {
                 ❌ Decline
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========== EDIT MODAL ========== */}
+      {showEditModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0,0,0,0.5)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1001,
+          padding: '20px',
+          overflowY: 'auto'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            maxWidth: '800px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            padding: '32px',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.3)',
+            animation: 'fadeIn 0.3s ease'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '20px', color: '#1f2937', margin: 0 }}>✏️ Edit Application</h2>
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditData(null);
+                  setEditMessage('');
+                }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#9ca3af',
+                  transition: 'color 0.3s ease'
+                }}
+                onMouseEnter={(e) => e.target.style.color = '#1f2937'}
+                onMouseLeave={(e) => e.target.style.color = '#9ca3af'}
+              >
+                ×
+              </button>
+            </div>
+
+            {editMessage && (
+              <div style={{
+                padding: '12px 16px',
+                borderRadius: '8px',
+                marginBottom: '16px',
+                background: editMessage.includes('✅') ? '#d1fae5' : '#fee2e2',
+                color: editMessage.includes('✅') ? '#065f46' : '#991b1b',
+                border: `1px solid ${editMessage.includes('✅') ? '#34d399' : '#fca5a5'}`
+              }}>
+                {editMessage}
+              </div>
+            )}
+
+            {editLoading ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
+                ⏳ Loading application details...
+              </div>
+            ) : editData ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                {/* Personal Information */}
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <h3 style={{ fontSize: '16px', color: '#1a56db', marginBottom: '12px', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px' }}>
+                    👤 Personal Information
+                  </h3>
+                </div>
+
+                <div>
+                  <label style={labelStyle}>First Name *</label>
+                  <input
+                    type="text"
+                    name="first_name"
+                    value={editData.first_name || ''}
+                    onChange={handleEditChange}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Middle Name</label>
+                  <input
+                    type="text"
+                    name="middle_name"
+                    value={editData.middle_name || ''}
+                    onChange={handleEditChange}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Last Name *</label>
+                  <input
+                    type="text"
+                    name="last_name"
+                    value={editData.last_name || ''}
+                    onChange={handleEditChange}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Suffix</label>
+                  <select
+                    name="suffix"
+                    value={editData.suffix || ''}
+                    onChange={handleEditChange}
+                    style={inputStyle}
+                  >
+                    <option value="">None</option>
+                    <option value="Jr.">Jr.</option>
+                    <option value="Sr.">Sr.</option>
+                    <option value="II">II</option>
+                    <option value="III">III</option>
+                    <option value="IV">IV</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Birth Date</label>
+                  <input
+                    type="date"
+                    name="birth_date"
+                    value={editData.birth_date || ''}
+                    onChange={handleEditChange}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Gender</label>
+                  <select
+                    name="gender"
+                    value={editData.gender || ''}
+                    onChange={handleEditChange}
+                    style={inputStyle}
+                  >
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={labelStyle}>Address</label>
+                  <input
+                    type="text"
+                    name="address"
+                    value={editData.address || ''}
+                    onChange={handleEditChange}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Contact Number</label>
+                  <input
+                    type="text"
+                    name="contact_number"
+                    value={editData.contact_number || ''}
+                    onChange={handleEditChange}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Email *</label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={editData.email || ''}
+                    onChange={handleEditChange}
+                    style={inputStyle}
+                  />
+                </div>
+
+                {/* Parent/Guardian Information */}
+                <div style={{ gridColumn: '1 / -1', marginTop: '8px' }}>
+                  <h3 style={{ fontSize: '16px', color: '#1a56db', marginBottom: '12px', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px' }}>
+                    👨‍👩‍👦 Parent/Guardian Information
+                  </h3>
+                </div>
+
+                <div>
+                  <label style={labelStyle}>Father's Name</label>
+                  <input
+                    type="text"
+                    name="father_name"
+                    value={editData.father_name || ''}
+                    onChange={handleEditChange}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Father's Occupation</label>
+                  <input
+                    type="text"
+                    name="father_occupation"
+                    value={editData.father_occupation || ''}
+                    onChange={handleEditChange}
+                    style={inputStyle}
+                  />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={labelStyle}>Father's Contact</label>
+                  <input
+                    type="text"
+                    name="father_contact"
+                    value={editData.father_contact || ''}
+                    onChange={handleEditChange}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Mother's Name</label>
+                  <input
+                    type="text"
+                    name="mother_name"
+                    value={editData.mother_name || ''}
+                    onChange={handleEditChange}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Mother's Occupation</label>
+                  <input
+                    type="text"
+                    name="mother_occupation"
+                    value={editData.mother_occupation || ''}
+                    onChange={handleEditChange}
+                    style={inputStyle}
+                  />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={labelStyle}>Mother's Contact</label>
+                  <input
+                    type="text"
+                    name="mother_contact"
+                    value={editData.mother_contact || ''}
+                    onChange={handleEditChange}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Guardian's Name</label>
+                  <input
+                    type="text"
+                    name="guardian_name"
+                    value={editData.guardian_name || ''}
+                    onChange={handleEditChange}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Guardian's Contact</label>
+                  <input
+                    type="text"
+                    name="guardian_contact"
+                    value={editData.guardian_contact || ''}
+                    onChange={handleEditChange}
+                    style={inputStyle}
+                  />
+                </div>
+
+                {/* Application Details */}
+                <div style={{ gridColumn: '1 / -1', marginTop: '8px' }}>
+                  <h3 style={{ fontSize: '16px', color: '#1a56db', marginBottom: '12px', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px' }}>
+                    📄 Application Details
+                  </h3>
+                </div>
+
+                <div>
+                  <label style={labelStyle}>Academic Year</label>
+                  <input
+                    type="text"
+                    name="academic_year"
+                    value={editData.academic_year || ''}
+                    onChange={handleEditChange}
+                    style={inputStyle}
+                  />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={labelStyle}>Registrar Remarks</label>
+                  <textarea
+                    name="registrar_remarks"
+                    value={editData.registrar_remarks || ''}
+                    onChange={handleEditChange}
+                    style={{ ...inputStyle, minHeight: '80px' }}
+                    placeholder="Enter remarks..."
+                  />
+                </div>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
+                No data found.
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            {!editLoading && editData && (
+              <div style={{ marginTop: '24px', borderTop: '2px solid #e5e7eb', paddingTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditData(null);
+                    setEditMessage('');
+                  }}
+                  style={{
+                    background: '#6b7280',
+                    color: 'white',
+                    border: 'none',
+                    padding: '10px 24px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={saving}
+                  style={{
+                    background: saving ? '#9ca3af' : '#1a56db',
+                    color: 'white',
+                    border: 'none',
+                    padding: '10px 24px',
+                    borderRadius: '8px',
+                    cursor: saving ? 'not-allowed' : 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  {saving ? '💾 Saving...' : '💾 Save Changes'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

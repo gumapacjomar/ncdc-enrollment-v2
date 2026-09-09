@@ -1,0 +1,728 @@
+================================================================================
+                    NCDC ENROLLMENT SYSTEM - COMPLETE DOCUMENTATION
+================================================================================
+
+PROJECT: Preschool Enrollment System for National Child Development Center (NCDC)
+VERSION: 2.0
+DATE: September 2026
+================================================================================
+
+
+============================================================
+1. SYSTEM OVERVIEW
+============================================================
+
+PURPOSE:
+Web-based preschool enrollment system for National Child Development Center.
+Manages student applications, document uploads, registrar review, 
+admin confirmation, student accounts, profiles, password requests, 
+and enrollment status.
+
+CORE FUNCTIONS:
+- Student applications (online with document uploads)
+- Registrar review (approve/decline applications)
+- Admin confirmation (final enrollment with student ID generation)
+- Student account creation
+- Profile management (view, edit, upload photo)
+- Password management (change, reset request)
+
+
+============================================================
+2. TECHNOLOGY STACK
+============================================================
+
+LAYER          | TECHNOLOGY                    | PORT
+---------------|-------------------------------|------------
+Frontend       | React + Vite                  | 5173
+               | React Router                  |
+               | Axios                         |
+Backend        | Node.js + Express             | 5000
+Database       | MySQL (mysql2)                | 3307
+Authentication | bcryptjs + JWT                |
+File Upload    | multer                        |
+
+
+============================================================
+3. PROJECT STRUCTURE
+============================================================
+
+ncdc-enrollment-v2/
+├── client/                        # React Frontend
+│   ├── src/
+│   │   ├── pages/
+│   │   │   ├── HomePage.jsx
+│   │   │   ├── LoginPage.jsx
+│   │   │   ├── StudentApplication.jsx
+│   │   │   ├── admin/
+│   │   │   │   ├── Dashboard.jsx          # Admin main dashboard
+│   │   │   │   ├── AllApplications.jsx    # View all apps
+│   │   │   │   ├── ConfirmEnrollments.jsx # Confirm enrollments
+│   │   │   │   ├── RegistrarManagement.jsx
+│   │   │   │   └── Profile.jsx
+│   │   │   ├── registrar/
+│   │   │   │   └── Dashboard.jsx          # Registrar dashboard
+│   │   │   └── student/
+│   │   │       ├── Dashboard.jsx          # Student dashboard
+│   │   │       └── Profile.jsx            # Student profile
+│   │   ├── services/
+│   │   │   └── api.js                     # Axios client
+│   │   ├── App.jsx                        # Routes
+│   │   └── main.jsx
+│   └── package.json
+│
+├── server/                         # Node.js Backend
+│   ├── server.js                   # Main server file (ALL endpoints)
+│   ├── config/
+│   │   └── db.js
+│   ├── uploads/
+│   │   ├── requirements/           # Student documents
+│   │   └── profiles/               # Profile pictures
+│   └── package.json
+│
+├── database/
+│   └── ncdc_schema.sql
+├── .env                             # Environment variables
+└── package.json
+
+
+============================================================
+4. DATABASE SCHEMA (5 TABLES)
+============================================================
+
+------------------- 4.1 STUDENTS TABLE -------------------
+CREATE TABLE students (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    student_id VARCHAR(20) UNIQUE,           -- NCDC-000001
+    first_name VARCHAR(50) NOT NULL,
+    middle_name VARCHAR(50),
+    last_name VARCHAR(50) NOT NULL,
+    suffix VARCHAR(10),
+    birth_date DATE,
+    gender ENUM('Male', 'Female'),
+    address TEXT,
+    contact_number VARCHAR(20),
+    email VARCHAR(100) UNIQUE NOT NULL,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,          -- bcrypt hashed
+    father_name VARCHAR(100),
+    father_occupation VARCHAR(100),
+    father_contact VARCHAR(20),
+    mother_name VARCHAR(100),
+    mother_occupation VARCHAR(100),
+    mother_contact VARCHAR(20),
+    guardian_name VARCHAR(100),
+    guardian_contact VARCHAR(20),
+    profile_pic VARCHAR(255),
+    is_first_login BOOLEAN DEFAULT TRUE,
+    last_login DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+------------------- 4.2 ADMINS TABLE -------------------
+CREATE TABLE admins (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    employee_id VARCHAR(20) UNIQUE NOT NULL,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    position VARCHAR(100),
+    department VARCHAR(100),
+    profile_pic VARCHAR(255),
+    is_first_login BOOLEAN DEFAULT TRUE,
+    last_login DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+------------------- 4.3 REGISTRARS TABLE -------------------
+CREATE TABLE registrars (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    employee_id VARCHAR(20) UNIQUE NOT NULL,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    department VARCHAR(100),
+    profile_pic VARCHAR(255),
+    is_first_login BOOLEAN DEFAULT TRUE,
+    last_login DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+------------------- 4.4 APPLICATIONS TABLE -------------------
+CREATE TABLE applications (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    student_id INT NOT NULL,                 -- FK to students.id
+    academic_year VARCHAR(20),
+    birth_certificate VARCHAR(255),
+    immunization_record VARCHAR(255),
+    medical_clearance VARCHAR(255),
+    id_picture VARCHAR(255),
+    status ENUM('pending', 'approved', 'declined', 'rejected', 'confirmed') DEFAULT 'pending',
+    registrar_id INT,                        -- FK to registrars.id
+    registrar_remarks TEXT,
+    registrar_action_date DATETIME,
+    admin_id INT,                            -- FK to admins.id
+    admin_remarks TEXT,
+    admin_action_date DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+    FOREIGN KEY (registrar_id) REFERENCES registrars(id) ON DELETE SET NULL,
+    FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE SET NULL
+);
+
+------------------- 4.5 PASSWORD RESET REQUESTS TABLE -------------------
+CREATE TABLE password_reset_requests (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    student_id INT NOT NULL,                 -- FK to students.id
+    email VARCHAR(100) NOT NULL,
+    status ENUM('pending', 'resolved') DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
+);
+
+
+============================================================
+5. SYSTEM WORKFLOW (COMPLETE FLOW)
+============================================================
+
+=================== 5.1 APPLICATION PROCESS ===================
+
+STEP 1: STUDENT APPLIES
+┌─────────────────────────────────────────────────────────────┐
+│ Student visits /apply                                      │
+│ Fills up form:                                             │
+│   - Personal Info (Name, Birth Date, Gender, Address)      │
+│   - Contact Info (Email, Phone)                            │
+│   - Parent/Guardian Info (Father, Mother, Guardian)        │
+│   - Uploads Requirements:                                  │
+│     • Birth Certificate                                    │
+│     • Immunization Record                                  │
+│     • Medical Clearance                                    │
+│     • ID Picture                                           │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Backend: POST /api/apply                                   │
+│ Validates:                                                 │
+│   - Age (4-5 years old)                                    │
+│   - Email uniqueness                                       │
+│ Creates:                                                   │
+│   - Student record in students table                       │
+│   - Application record in applications table               │
+│   - Status: 'pending'                                      │
+│   - Username: firstname.lastname                           │
+│   - Random password: x7k9m2p4                              │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+                        STATUS: PENDING
+
+
+=================== 5.2 REGISTRAR REVIEW ===================
+
+STEP 2: REGISTRAR REVIEWS
+┌─────────────────────────────────────────────────────────────┐
+│ Registrar logs in → /registrar/dashboard                   │
+│ Views pending applications                                 │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Registrar clicks "View" → Modal opens                      │
+│ Sees:                                                      │
+│   - Full student details                                   │
+│   - Parent/Guardian info                                   │
+│   - Uploaded documents (downloadable links)                │
+│   - Can EDIT student info if needed                        │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Registrar chooses:                                         │
+│   ✅ Approve → Status: 'approved'                          │
+│        → Saved: registrar_id, remarks, action_date         │
+│                                                             │
+│   OR                                                        │
+│                                                             │
+│   ❌ Decline → Status: 'declined'                          │
+│        → Saved: registrar_id, remarks, action_date         │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+                    STATUS: APPROVED / DECLINED
+
+
+=================== 5.3 ADMIN CONFIRMATION ===================
+
+STEP 3: ADMIN REVIEWS & CONFIRMS
+┌─────────────────────────────────────────────────────────────┐
+│ Admin logs in → /admin/dashboard                           │
+│ Sees approved applications waiting for confirmation        │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Admin clicks "View" → Modal opens                          │
+│ Reviews:                                                   │
+│   - Student details                                        │
+│   - Parent/Guardian info                                   │
+│   - Documents                                              │
+│   - Registrar remarks                                      │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Admin chooses:                                             │
+│   ✅ CONFIRM                                               │
+│     → Generates Student ID: NCDC-000001                    │
+│     → Password = 6-digit ID: "000001"                      │
+│     → Updates student table with student_id                │
+│     → Updates password with hashed 6-digit ID              │
+│     → Status: 'confirmed'                                  │
+│     → Saved: admin_id, remarks, action_date                │
+│     → Alert shows: Student ID, Username, Password          │
+│     → Student can now login!                               │
+│                                                             │
+│   OR                                                        │
+│                                                             │
+│   ❌ REJECT                                                │
+│     → Status: 'rejected'                                   │
+│     → Saved: admin_id, remarks, action_date                │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+                    STATUS: CONFIRMED / REJECTED
+
+
+=================== 5.4 STUDENT LOGIN ===================
+
+STEP 4: STUDENT LOGS IN
+┌─────────────────────────────────────────────────────────────┐
+│ Student goes to /login                                     │
+│ Selects "Student" role                                     │
+│ Enter credentials:                                         │
+│   Username: juan.delacruz                                  │
+│   Password: 000001 (6-digit Student ID)                    │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Backend: POST /api/login                                   │
+│ Checks students table                                      │
+│ Verifies password (bcrypt compare)                         │
+│ Generates JWT token                                        │
+│ Returns user data                                          │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Student dashboard → /student/dashboard                     │
+│ Sees:                                                      │
+│   - Student ID                                             │
+│   - Enrollment status                                      │
+│   - Academic year                                          │
+│   - Application date                                       │
+│                                                             │
+│ Profile Page → /student/profile                            │
+│   - View/Edit personal info                                │
+│   - Upload profile picture                                 │
+│   - Change password                                        │
+└─────────────────────────────────────────────────────────────┘
+
+
+============================================================
+6. APPLICATION STATUSES
+============================================================
+
+STATUS      | DESCRIPTION                  | WHO          | NEXT
+------------|------------------------------|--------------|--------------
+pending     | Initial application          | Student      | Registrar reviews
+approved    | Registrar approved           | Registrar    | Admin confirms
+declined    | Registrar declined           | Registrar    | End of flow
+rejected    | Admin rejected               | Admin        | End of flow
+confirmed   | Admin confirmed/enrolled     | Admin        | Student logs in
+
+
+============================================================
+7. API ENDPOINTS REFERENCE
+============================================================
+
+------------------- 7.1 PUBLIC ROUTES -------------------
+METHOD  | ENDPOINT                   | DESCRIPTION
+--------|----------------------------|------------------------------
+POST    | /api/apply                 | Submit student application
+POST    | /api/login                 | User login (all roles)
+
+------------------- 7.2 REGISTRAR ROUTES -------------------
+METHOD  | ENDPOINT                                      | DESCRIPTION
+--------|-----------------------------------------------|------------------------------
+GET     | /api/registrar/pending                        | Get pending applications
+GET     | /api/registrar/application/:id                | Get single application details
+PUT     | /api/registrar/approve/:id                    | Approve application
+PUT     | /api/registrar/decline/:id                    | Decline application
+PUT     | /api/registrar/application/:id                | Edit application details
+GET     | /api/registrar/profile/:id                    | Get registrar profile
+PUT     | /api/registrar/profile/:id                    | Update registrar profile
+
+------------------- 7.3 ADMIN ROUTES -------------------
+METHOD  | ENDPOINT                                      | DESCRIPTION
+--------|-----------------------------------------------|------------------------------
+GET     | /api/admin/applications                        | Get all applications
+GET     | /api/admin/approved                            | Get approved applications
+GET     | /api/admin/rejected                            | Get rejected applications
+GET     | /api/admin/application/:id                     | Get full student details for view
+POST    | /api/admin/confirm/:id                         | Confirm enrollment
+PUT     | /api/admin/reject/:id                          | Reject application
+GET     | /api/admin/registrars                          | Get all registrars
+POST    | /api/admin/registrars                          | Create registrar
+PUT     | /api/admin/registrars/:id                      | Update registrar
+DELETE  | /api/admin/registrars/:id                      | Delete registrar
+GET     | /api/admin/password-requests                   | Get password reset requests
+POST    | /api/admin/generate-temp-password              | Generate temp password
+DELETE  | /api/admin/application/:id                     | Delete application
+DELETE  | /api/admin/student/:id                         | Delete student
+GET     | /api/admin/profile/:id                         | Get admin profile
+PUT     | /api/admin/profile/:id                         | Update admin profile
+
+------------------- 7.4 STUDENT ROUTES -------------------
+METHOD  | ENDPOINT                                      | DESCRIPTION
+--------|-----------------------------------------------|------------------------------
+GET     | /api/student/profile/:id                       | Get student profile
+GET     | /api/student/application/:id                   | Get student application
+PUT     | /api/student/update-profile/:id                | Update student profile
+POST    | /api/student/change-password                   | Change student password
+POST    | /api/student/upload-profile-pic/:id            | Upload profile picture
+
+------------------- 7.5 AUTH ROUTES -------------------
+METHOD  | ENDPOINT                                      | DESCRIPTION
+--------|-----------------------------------------------|------------------------------
+POST    | /api/change-password                           | Change password (all roles)
+POST    | /api/forgot-password                           | Request password reset
+
+
+============================================================
+8. AUTHENTICATION SYSTEM
+============================================================
+
+LOGIN PROCESS:
+POST /api/login
+Body: { username, password, role }
+Role = 'student' | 'admin' | 'registrar'
+
+Backend checks appropriate table based on role
+Verifies password with bcrypt compare
+Returns JWT token + user data
+
+JWT TOKEN:
+{
+  id: user.id,
+  username: user.username,
+  role: user.role
+}
+Expires in 7 days
+
+LOCAL STORAGE:
+localStorage.setItem('token', token);
+localStorage.setItem('user', JSON.stringify(user));
+
+AXIOS INTERCEPTOR:
+Authorization: Bearer <token>
+
+
+============================================================
+9. FRONTEND ROUTES
+============================================================
+
+------------------- 9.1 PUBLIC ROUTES -------------------
+PATH                    | COMPONENT              | DESCRIPTION
+------------------------|------------------------|----------------------
+/                       | HomePage               | Landing page
+/login                  | LoginPage              | Login page
+/apply                  | StudentApplication     | Application form
+
+------------------- 9.2 ADMIN ROUTES -------------------
+PATH                    | COMPONENT              | DESCRIPTION
+------------------------|------------------------|----------------------
+/admin/dashboard        | AdminDashboard         | Admin dashboard
+/admin/applications     | AllApplications        | All applications
+/admin/approved         | ConfirmEnrollments     | Confirm enrollments
+/admin/registrars       | RegistrarManagement    | Manage registrars
+/admin/password-requests| PasswordRequests       | Password reset
+/admin/reports          | Reports                | Reports
+/admin/profile          | AdminProfile           | Profile
+
+------------------- 9.3 REGISTRAR ROUTES -------------------
+PATH                    | COMPONENT              | DESCRIPTION
+------------------------|------------------------|----------------------
+/registrar/dashboard    | RegistrarDashboard     | Registrar dashboard
+/registrar/profile      | RegistrarProfile       | Profile
+
+------------------- 9.4 STUDENT ROUTES -------------------
+PATH                    | COMPONENT              | DESCRIPTION
+------------------------|------------------------|----------------------
+/student/dashboard      | StudentDashboard       | Student dashboard
+/student/profile        | StudentProfile         | Profile
+
+
+============================================================
+10. FILE UPLOADS
+============================================================
+
+APPLICATION REQUIREMENTS:
+Location: server/uploads/requirements/
+Allowed: jpg, jpeg, png, pdf
+Max Size: 5 MB
+
+PROFILE PICTURES:
+Location: server/uploads/profiles/
+Allowed: jpg, jpeg, png, gif
+Max Size: 2 MB
+
+SERVE FILES:
+http://localhost:5000/uploads/requirements/filename.ext
+http://localhost:5000/uploads/profiles/filename.ext
+
+
+============================================================
+11. IMPORTANT ID DISTINCTIONS
+============================================================
+
+FIELD               | TYPE          | DESCRIPTION              | EXAMPLE
+--------------------|---------------|--------------------------|------------------
+students.id         | INT           | Internal primary key     | 1, 2, 3
+students.student_id | VARCHAR(20)   | Public student ID        | NCDC-000001
+applications.id     | INT           | Application ID           | 1, 2, 3
+
+⚠️ IMPORTANT:
+- Use students.id (numeric) for database queries
+- Use students.student_id (NCDC-xxxxxx) for display only
+- NEVER confuse these two fields!
+
+
+============================================================
+12. DEVELOPMENT COMMANDS
+============================================================
+
+BACKEND:
+cd server
+npm install
+npm start              # Production
+npm run dev            # Development (nodemon)
+
+FRONTEND:
+cd client
+npm install
+npm run dev            # Starts on http://localhost:5173
+
+ENVIRONMENT VARIABLES (.env):
+DB_HOST=localhost
+DB_PORT=3307
+DB_USER=root
+DB_PASSWORD=
+DB_NAME=ncdc_enrollment_v3
+PORT=5000
+JWT_SECRET=my_secret_key
+
+
+============================================================
+13. DEFAULT ACCOUNTS
+============================================================
+
+ADMIN:
+Username: admin
+Password: admin123
+
+REGISTRAR:
+Create via: Admin → Registrar Management → Add Registrar
+
+STUDENT:
+Create via: Student applies /apply OR Admin confirms application
+
+
+============================================================
+14. COMPLETED FEATURES CHECKLIST
+============================================================
+
+FEATURE                                     | STATUS
+--------------------------------------------|----------
+Student Application                         | ✅ Done
+Document Upload                             | ✅ Done
+Registrar Approve/Decline                   | ✅ Done
+Registrar Edit Application                  | ✅ Done
+Admin Confirm with Student ID               | ✅ Done
+Admin Reject                                | ✅ Done
+Admin View Application                      | ✅ Done
+Student Login                               | ✅ Done
+Student Dashboard                           | ✅ Done
+Student Profile Update                      | ✅ Done
+Student Profile Picture Upload              | ✅ Done
+Student Change Password                     | ✅ Done
+Password Reset Request                      | ✅ Done
+Admin Password Reset Management             | ✅ Done
+Registrar Management                        | ✅ Done
+All Applications View                       | ✅ Done
+Drop/Delete Student                         | ✅ Done
+Separate Tables (students/admins/registrars)| ✅ Done
+
+
+============================================================
+15. PENDING FEATURES (Optional)
+============================================================
+
+FEATURE                     | DESCRIPTION
+----------------------------|----------------------------------------------
+Email Notifications         | Send emails for confirmations/reset
+Reports Generation          | Export enrollment reports
+Authentication Middleware   | Secure API routes
+Return Function             | Admin returns to registrar
+
+
+============================================================
+16. COMMON ISSUES & SOLUTIONS
+============================================================
+
+ISSUE: "Invalid credentials"
+SOLUTION: 
+- Check if user exists in correct table (students/admins/registrars)
+- Verify password is correct
+- Check if role is selected correctly
+
+ISSUE: "Application not found"
+SOLUTION:
+- Use application_id not student_id for view
+- Check if application exists in database
+
+ISSUE: "student_id is null"
+SOLUTION:
+- Student hasn't been confirmed yet
+- Use application_id with /registrar/application/:id
+
+ISSUE: "File upload fails"
+SOLUTION:
+- Check file size (max 5MB)
+- Check file type (jpg, png, pdf)
+- Check uploads/requirements/ folder exists
+
+ISSUE: "CORS error"
+SOLUTION:
+- Make sure backend is running on http://localhost:5000
+- Check CORS configuration in server.js
+
+
+============================================================
+17. KEY FUNCTIONS REFERENCE
+============================================================
+
+STUDENT ID GENERATION:
+// server/server.js
+const generateStudentId = () => {
+    // Returns: NCDC-000001, NCDC-000002, ...
+}
+
+PASSWORD SET ON CONFIRM:
+// server/server.js - Admin Confirm
+const defaultPassword = studentId.replace('NCDC-', '');
+// NCDC-000001 → "000001"
+
+VIEW APPLICATION (Admin):
+// client/src/pages/admin/AllApplications.jsx
+const handleView = async (applicationId) => {
+    const response = await API.get(`/registrar/application/${applicationId}`);
+    setSelectedStudent(response.data);
+};
+
+CONFIRM APPLICATION (Admin):
+// client/src/pages/admin/AdminDashboard.jsx
+const handleConfirm = async () => {
+    const response = await API.post(`/admin/confirm/${selectedApp.id}`, {
+        adminId: user.id,
+        remarks: remarks
+    });
+    // Alert shows: Student ID, Username, Password
+};
+
+
+============================================================
+18. FILES UPDATED
+============================================================
+
+FILE PATH                                              | DESCRIPTION
+--------------------------------------------------------|----------------------------------------
+server/server.js                                        | Main backend (all endpoints)
+client/src/pages/admin/Dashboard.jsx                    | Admin dashboard
+client/src/pages/admin/AllApplications.jsx              | All applications view
+client/src/pages/admin/ConfirmEnrollments.jsx           | Confirm enrollments
+client/src/pages/registrar/Dashboard.jsx                | Registrar dashboard
+
+
+============================================================
+19. QUICK COMMANDS FOR NEW CHAT
+============================================================
+
+TO CONTINUE PROJECT IN NEW CHAT, PASTE THIS:
+
+=== NCDC ENROLLMENT SYSTEM - PROJECT SUMMARY ===
+
+PROJECT: Preschool Enrollment System for NCDC
+
+TECH STACK:
+- Frontend: React + Vite (port 5173)
+- Backend: Node.js + Express (port 5000)
+- Database: MySQL (port 3307)
+- Auth: bcryptjs + JWT
+
+DATABASE (5 tables):
+1. students - Student accounts + profile
+2. admins - Admin accounts
+3. registrars - Registrar accounts
+4. applications - Enrollment applications
+5. password_reset_requests - Password reset
+
+WORKFLOW:
+1. Student applies → status: 'pending'
+2. Registrar reviews → Approve ('approved') or Decline ('declined')
+3. Admin reviews → Confirm ('confirmed') or Reject ('rejected')
+4. If confirmed: Student ID (NCDC-000001) + Password = 6-digit ID (000001)
+5. Student logs in with firstname.lastname + 6-digit ID
+
+KEY ENDPOINTS:
+- POST /api/apply - Student application
+- POST /api/login - Login (all roles)
+- GET /api/registrar/pending - Pending applications
+- PUT /api/registrar/approve/:id - Approve
+- PUT /api/registrar/decline/:id - Decline
+- PUT /api/registrar/application/:id - Edit application
+- GET /api/admin/applications - All applications
+- GET /api/admin/approved - Approved applications
+- POST /api/admin/confirm/:id - Confirm (creates student ID)
+- PUT /api/admin/reject/:id - Reject
+- GET /api/admin/application/:id - Get student details for view
+
+IMPORTANT: Use application_id for view, not student_id (may be null)
+
+DEFAULT ADMIN: admin / admin123
+
+FILES UPDATED:
+- server/server.js
+- client/src/pages/admin/Dashboard.jsx
+- client/src/pages/admin/AllApplications.jsx
+- client/src/pages/admin/ConfirmEnrollments.jsx
+- client/src/pages/registrar/Dashboard.jsx
+
+CONTINUE FROM: [paste last thing we were working on]
+
+
+============================================================
+20. BRO, REMEMBER:
+============================================================
+
+1. Use application_id for viewing applications (not student_id)
+2. Password = 6-digit Student ID (e.g., 000001)
+3. 3 separate tables for users: students, admins, registrars
+4. Status flow: pending → approved → confirmed
+5. Always check console logs for debugging
+6. Default Admin: admin / admin123
+7. File uploads go to server/uploads/requirements/ and server/uploads/profiles/
+
+
+================================================================================
+                    END OF DOCUMENTATION
+================================================================================

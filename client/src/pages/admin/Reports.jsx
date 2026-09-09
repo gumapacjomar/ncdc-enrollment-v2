@@ -19,6 +19,7 @@ const Reports = () => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('user'));
@@ -30,51 +31,39 @@ const Reports = () => {
 
   const fetchData = async () => {
     setLoading(true);
+    setError('');
     try {
-      const response = await API.get('/admin/applications');
-      const data = response.data || [];
-      setApplications(data);
-      calculateStats(data);
-      calculateMonthlyData(data);
+      const response = await API.get('/admin/reports');
+      if (response.data.success) {
+        setApplications(response.data.data || []);
+        setStats(response.data.stats || {
+          total: 0,
+          pending: 0,
+          approved: 0,
+          confirmed: 0,
+          rejected: 0,
+          declined: 0
+        });
+        setMonthlyData(response.data.monthlyData || []);
+      } else {
+        setError('Failed to load reports data');
+      }
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('Error fetching reports:', error);
+      setError('Failed to load reports. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const calculateStats = (data) => {
-    setStats({
-      total: data.length,
-      pending: data.filter(a => a.status === 'pending').length,
-      approved: data.filter(a => a.status === 'approved').length,
-      confirmed: data.filter(a => a.status === 'confirmed').length,
-      rejected: data.filter(a => a.status === 'rejected').length,
-      declined: data.filter(a => a.status === 'declined').length
-    });
-  };
-
-  const calculateMonthlyData = (data) => {
-    const months = {};
-    data.forEach(app => {
-      const date = new Date(app.created_at);
-      const monthYear = `${date.toLocaleString('default', { month: 'short' })} ${date.getFullYear()}`;
-      if (!months[monthYear]) {
-        months[monthYear] = 0;
-      }
-      months[monthYear]++;
-    });
-    setMonthlyData(Object.entries(months).map(([month, count]) => ({ month, count })));
-  };
-
   const filteredApplications = applications.filter(app => {
-    const fullName = `${app.first_name} ${app.middle_name || ''} ${app.last_name}`.toLowerCase();
+    const fullName = `${app.first_name || ''} ${app.middle_name || ''} ${app.last_name || ''}`.toLowerCase();
     const matchesSearch = fullName.includes(searchTerm.toLowerCase()) || 
-                          app.email?.toLowerCase().includes(searchTerm.toLowerCase());
+                          (app.email || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterStatus === 'all' || app.status === filterStatus;
     
     let matchesDate = true;
-    if (dateFrom && dateTo) {
+    if (dateFrom && dateTo && app.created_at) {
       const appDate = new Date(app.created_at);
       const from = new Date(dateFrom);
       const to = new Date(dateTo);
@@ -87,13 +76,13 @@ const Reports = () => {
   const exportToCSV = () => {
     const headers = ['Name', 'Email', 'Contact', 'Status', 'Date', 'Registrar', 'Admin'];
     const rows = filteredApplications.map(app => [
-      `${app.first_name} ${app.last_name}`,
-      app.email,
+      `${app.first_name || ''} ${app.last_name || ''}`,
+      app.email || 'N/A',
       app.contact_number || 'N/A',
-      app.status,
-      new Date(app.created_at).toLocaleDateString(),
-      app.registrar_name || 'N/A',
-      app.admin_name || 'N/A'
+      app.status || 'N/A',
+      app.created_at ? new Date(app.created_at).toLocaleDateString() : 'N/A',
+      app.registrar_first_name ? `${app.registrar_first_name} ${app.registrar_last_name || ''}` : 'N/A',
+      app.admin_first_name ? `${app.admin_first_name} ${app.admin_last_name || ''}` : 'N/A'
     ]);
 
     let csv = headers.join(',') + '\n';
@@ -142,6 +131,15 @@ const Reports = () => {
     confirmed: applications.filter(a => a.status === 'confirmed').length,
     rejected: applications.filter(a => a.status === 'rejected').length,
     declined: applications.filter(a => a.status === 'declined').length
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
   };
 
   return (
@@ -237,6 +235,19 @@ const Reports = () => {
           </div>
         </div>
 
+        {error && (
+          <div style={{
+            padding: '12px 16px',
+            borderRadius: '8px',
+            marginBottom: '16px',
+            background: '#fee2e2',
+            color: '#991b1b',
+            border: '1px solid #fca5a5'
+          }}>
+            ❌ {error}
+          </div>
+        )}
+
         {/* Stats Cards */}
         <div style={{
           display: 'grid',
@@ -326,8 +337,8 @@ const Reports = () => {
               padding: '10px 0'
             }}>
               {monthlyData.map((item, index) => {
-                const maxCount = Math.max(...monthlyData.map(d => d.count));
-                const height = maxCount > 0 ? (item.count / maxCount) * 100 : 0;
+                const maxCount = Math.max(...monthlyData.map(d => d.count), 1);
+                const height = (item.count / maxCount) * 100;
                 return (
                   <div key={index} style={{
                     flex: 1,
@@ -498,22 +509,22 @@ const Reports = () => {
                     <tr key={index} style={{ borderBottom: '1px solid #e5e7eb' }}>
                       <td style={{ padding: '10px', fontSize: '13px', color: '#6b7280' }}>{index + 1}</td>
                       <td style={{ padding: '10px', fontSize: '13px', color: '#1f2937', fontWeight: '500' }}>
-                        {app.first_name} {app.middle_name || ''} {app.last_name} {app.suffix || ''}
+                        {app.first_name || ''} {app.middle_name || ''} {app.last_name || ''} {app.suffix || ''}
                       </td>
-                      <td style={{ padding: '10px', fontSize: '13px', color: '#6b7280' }}>{app.email}</td>
+                      <td style={{ padding: '10px', fontSize: '13px', color: '#6b7280' }}>{app.email || 'N/A'}</td>
                       <td style={{ padding: '10px' }}>
                         <span style={statusBadge(app.status)}>
-                          {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
+                          {app.status ? app.status.charAt(0).toUpperCase() + app.status.slice(1) : 'N/A'}
                         </span>
                       </td>
                       <td style={{ padding: '10px', fontSize: '13px', color: '#6b7280' }}>
-                        {new Date(app.created_at).toLocaleDateString()}
+                        {formatDate(app.created_at)}
                       </td>
                       <td style={{ padding: '10px', fontSize: '13px', color: '#6b7280' }}>
-                        {app.registrar_name || 'N/A'}
+                        {app.registrar_first_name ? `${app.registrar_first_name} ${app.registrar_last_name || ''}` : 'N/A'}
                       </td>
                       <td style={{ padding: '10px', fontSize: '13px', color: '#6b7280' }}>
-                        {app.admin_name || 'N/A'}
+                        {app.admin_first_name ? `${app.admin_first_name} ${app.admin_last_name || ''}` : 'N/A'}
                       </td>
                     </tr>
                   ))}

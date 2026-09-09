@@ -558,7 +558,7 @@ const HomePage = () => {
             gap: '30px'
           }}>
             {[
-              { icon: '📍', title: 'Address', detail: '123 Education St.,\nManila, Philippines' },
+              { icon: '📍', title: 'Address', detail: 'Poblacion, Sevilla,Bohol' },
               { icon: '📧', title: 'Email', detail: 'info@ncdc.edu.ph' },
               { icon: '📞', title: 'Phone', detail: '+63 (2) 8123-4567' }
             ].map((item, index) => (

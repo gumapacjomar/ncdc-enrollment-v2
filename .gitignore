@@ -1,0 +1,4 @@
+server/.env
+server/uploads/
+ncdc-enrollment-v2/
+node_modules/

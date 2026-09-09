@@ -17,6 +17,14 @@ const AdminDashboard = () => {
   const [hoveredCard, setHoveredCard] = useState(null);
   const [profilePic, setProfilePic] = useState(null);
 
+  // ===== VIEW MODAL STATE =====
+  const [showModal, setShowModal] = useState(false);
+  const [selectedApp, setSelectedApp] = useState(null);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [remarks, setRemarks] = useState('');
+  const [modalMessage, setModalMessage] = useState('');
+
   const user = JSON.parse(localStorage.getItem('user'));
   const currentPath = location.pathname;
 
@@ -64,6 +72,108 @@ const AdminDashboard = () => {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ===== VIEW FUNCTION =====
+  const handleView = async (applicationId) => {
+    console.log('🔍 View clicked for application ID:', applicationId);
+    
+    if (!applicationId) {
+      alert('Error: No application ID found');
+      return;
+    }
+
+    setModalLoading(true);
+    setShowModal(true);
+    setModalMessage('');
+    setRemarks('');
+    
+    try {
+      const response = await API.get(`/registrar/application/${applicationId}`);
+      console.log('📋 Application data:', response.data);
+      
+      if (response.data) {
+        setSelectedApp(response.data);
+      } else {
+        setModalMessage('Application not found');
+      }
+    } catch (error) {
+      console.error('❌ Error fetching application:', error);
+      setModalMessage('Failed to load application details');
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  // ===== CONFIRM FUNCTION - UPDATED =====
+  const handleConfirm = async () => {
+    if (!window.confirm('Are you sure you want to confirm this enrollment?')) return;
+    
+    setActionLoading(true);
+    setModalMessage('');
+    
+    try {
+      const response = await API.post(`/admin/confirm/${selectedApp.id}`, {
+        adminId: user.id,
+        remarks: remarks || 'Confirmed by Admin'
+      });
+      
+      setModalMessage({ type: 'success', text: response.data.message });
+      
+      if (response.data.data) {
+        alert(
+          `✅ ENROLLMENT CONFIRMED!\n\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━\n` +
+          `Student ID: ${response.data.data.studentId}\n` +
+          `Username: ${response.data.data.username}\n` +
+          `Password: ${response.data.data.password}\n` +
+          `Email: ${response.data.data.email}\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+          `📌 Use your 6-digit Student ID number as password.\n` +
+          `🔒 Please change your password after first login.`
+        );
+      }
+      
+      setTimeout(() => {
+        setShowModal(false);
+        setSelectedApp(null);
+        fetchDashboardData();
+      }, 2000);
+      
+    } catch (error) {
+      setModalMessage({ type: 'error', text: error.response?.data?.error || 'Failed to confirm enrollment' });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // ===== REJECT FUNCTION =====
+  const handleReject = async () => {
+    const reason = prompt('Please enter reason for rejection:');
+    if (reason === null) return;
+    
+    setActionLoading(true);
+    setModalMessage('');
+    
+    try {
+      await API.put(`/admin/reject/${selectedApp.id}`, {
+        adminId: user.id,
+        remarks: reason || 'Rejected by Admin'
+      });
+      
+      setModalMessage({ type: 'success', text: '✅ Application rejected and returned to registrar' });
+      
+      setTimeout(() => {
+        setShowModal(false);
+        setSelectedApp(null);
+        fetchDashboardData();
+      }, 2000);
+      
+    } catch (error) {
+      setModalMessage({ type: 'error', text: 'Failed to reject application' });
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -168,7 +278,7 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        {/* Profile Section - Click to go to Profile Page */}
+        {/* Profile Section */}
         <Link to="/admin/profile" style={{
           textDecoration: 'none',
           padding: '20px 24px',
@@ -290,7 +400,7 @@ const AdminDashboard = () => {
           ))}
         </div>
 
-        {/* Logout Button at Bottom */}
+        {/* Logout Button */}
         <div style={{ 
           padding: '12px 16px', 
           borderTop: '1px solid rgba(255,255,255,0.2)',
@@ -563,28 +673,36 @@ const AdminDashboard = () => {
                         </span>
                       </td>
                       <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                        <Link to={`/admin/confirm/${app.application_id}`} style={{
-                          background: 'linear-gradient(135deg, #10b981, #34d399)',
-                          color: 'white',
-                          padding: '6px 18px',
-                          borderRadius: '8px',
-                          textDecoration: 'none',
-                          fontSize: '12px',
-                          fontWeight: '600',
-                          boxShadow: '0 4px 12px rgba(16,185,129,0.3)',
-                          transition: 'all 0.3s ease',
-                          display: 'inline-block'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.target.style.transform = 'scale(1.05)';
-                          e.target.style.boxShadow = '0 6px 20px rgba(16,185,129,0.4)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.target.style.transform = 'scale(1)';
-                          e.target.style.boxShadow = '0 4px 12px rgba(16,185,129,0.3)';
-                        }}>
-                          ✅ Confirm
-                        </Link>
+                        <button
+                          onClick={() => {
+                            console.log('🔍 View button clicked for app ID:', app.application_id);
+                            handleView(app.application_id);
+                          }}
+                          style={{
+                            background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+                            color: 'white',
+                            border: 'none',
+                            padding: '8px 24px',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            fontWeight: '600',
+                            boxShadow: '0 4px 12px rgba(59,130,246,0.3)',
+                            transition: 'all 0.3s ease',
+                            zIndex: 10,
+                            position: 'relative'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.target.style.transform = 'scale(1.05)';
+                            e.target.style.boxShadow = '0 6px 20px rgba(59,130,246,0.4)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.transform = 'scale(1)';
+                            e.target.style.boxShadow = '0 4px 12px rgba(59,130,246,0.3)';
+                          }}
+                        >
+                          👁️ View
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -672,6 +790,231 @@ const AdminDashboard = () => {
           </p>
         </div>
       </div>
+
+      {/* ========== VIEW MODAL (with Confirm & Reject) ========== */}
+      {showModal && selectedApp && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0,0,0,0.5)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            maxWidth: '700px',
+            width: '100%',
+            maxHeight: '80vh',
+            overflowY: 'auto',
+            padding: '32px',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.3)',
+            animation: 'fadeIn 0.3s ease'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '20px', color: '#1f2937', margin: 0 }}>📄 Application Details</h2>
+              <button
+                onClick={() => {
+                  setShowModal(false);
+                  setSelectedApp(null);
+                  setModalMessage('');
+                  setRemarks('');
+                }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#9ca3af',
+                  transition: 'color 0.3s ease'
+                }}
+                onMouseEnter={(e) => e.target.style.color = '#1f2937'}
+                onMouseLeave={(e) => e.target.style.color = '#9ca3af'}
+              >
+                ×
+              </button>
+            </div>
+
+            {modalMessage && (
+              <div style={{
+                padding: '12px 16px',
+                borderRadius: '8px',
+                marginBottom: '16px',
+                background: modalMessage.type === 'success' ? '#d1fae5' : '#fee2e2',
+                color: modalMessage.type === 'success' ? '#065f46' : '#991b1b',
+                border: `1px solid ${modalMessage.type === 'success' ? '#34d399' : '#fca5a5'}`
+              }}>
+                {modalMessage.text}
+              </div>
+            )}
+
+            {modalLoading ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
+                ⏳ Loading application details...
+              </div>
+            ) : (
+              <>
+                {/* Student Information */}
+                <div style={{ marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '16px', color: '#1a56db', marginBottom: '8px' }}>👤 Student Information</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', background: '#f8fafc', padding: '12px', borderRadius: '8px' }}>
+                    <p style={{ margin: '4px 0' }}><strong>Name:</strong> {selectedApp.first_name} {selectedApp.middle_name || ''} {selectedApp.last_name} {selectedApp.suffix || ''}</p>
+                    <p style={{ margin: '4px 0' }}><strong>Email:</strong> {selectedApp.email}</p>
+                    <p style={{ margin: '4px 0' }}><strong>Contact:</strong> {selectedApp.contact_number || 'N/A'}</p>
+                    <p style={{ margin: '4px 0' }}><strong>Birth Date:</strong> {selectedApp.birth_date}</p>
+                    <p style={{ margin: '4px 0' }}><strong>Gender:</strong> {selectedApp.gender}</p>
+                    <p style={{ margin: '4px 0' }}><strong>Address:</strong> {selectedApp.address}</p>
+                  </div>
+                </div>
+
+                {/* Parent/Guardian */}
+                <div style={{ marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '16px', color: '#1a56db', marginBottom: '8px' }}>👨‍👩‍👦 Parent/Guardian</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', background: '#f8fafc', padding: '12px', borderRadius: '8px' }}>
+                    <p style={{ margin: '2px 0', fontSize: '14px' }}><strong>Father:</strong> {selectedApp.father_name || 'N/A'}</p>
+                    <p style={{ margin: '2px 0', fontSize: '14px' }}><strong>Father Occupation:</strong> {selectedApp.father_occupation || 'N/A'}</p>
+                    <p style={{ margin: '2px 0', fontSize: '14px' }}><strong>Mother:</strong> {selectedApp.mother_name || 'N/A'}</p>
+                    <p style={{ margin: '2px 0', fontSize: '14px' }}><strong>Mother Occupation:</strong> {selectedApp.mother_occupation || 'N/A'}</p>
+                    <p style={{ margin: '2px 0', fontSize: '14px' }}><strong>Guardian:</strong> {selectedApp.guardian_name || 'N/A'}</p>
+                    <p style={{ margin: '2px 0', fontSize: '14px' }}><strong>Guardian Contact:</strong> {selectedApp.guardian_contact || 'N/A'}</p>
+                  </div>
+                </div>
+
+                {/* Requirements */}
+                <div style={{ marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '16px', color: '#1a56db', marginBottom: '8px' }}>📋 Requirements</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', background: '#f8fafc', padding: '12px', borderRadius: '8px' }}>
+                    <p style={{ margin: '2px 0', fontSize: '14px' }}>
+                      {selectedApp.birth_certificate ? (
+                        <a href={`http://localhost:5000/uploads/requirements/${selectedApp.birth_certificate}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>📄 Birth Certificate</a>
+                      ) : '📄 Birth Certificate: Not uploaded'}
+                    </p>
+                    <p style={{ margin: '2px 0', fontSize: '14px' }}>
+                      {selectedApp.immunization_record ? (
+                        <a href={`http://localhost:5000/uploads/requirements/${selectedApp.immunization_record}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>📄 Immunization Record</a>
+                      ) : '📄 Immunization: Not uploaded'}
+                    </p>
+                    <p style={{ margin: '2px 0', fontSize: '14px' }}>
+                      {selectedApp.medical_clearance ? (
+                        <a href={`http://localhost:5000/uploads/requirements/${selectedApp.medical_clearance}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>📄 Medical Clearance</a>
+                      ) : '📄 Medical Clearance: Not uploaded'}
+                    </p>
+                    <p style={{ margin: '2px 0', fontSize: '14px' }}>
+                      {selectedApp.id_picture ? (
+                        <a href={`http://localhost:5000/uploads/requirements/${selectedApp.id_picture}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>🖼️ ID Picture</a>
+                      ) : '🖼️ ID Picture: Not uploaded'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Registrar Info */}
+                <div style={{ marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '16px', color: '#1a56db', marginBottom: '8px' }}>📝 Registrar Review</h3>
+                  <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px' }}>
+                    <p style={{ margin: '2px 0', fontSize: '14px' }}><strong>Registrar:</strong> {selectedApp.registrar_first_name || 'N/A'} {selectedApp.registrar_last_name || ''}</p>
+                    <p style={{ margin: '2px 0', fontSize: '14px' }}><strong>Registrar Remarks:</strong> {selectedApp.registrar_remarks || 'N/A'}</p>
+                    <p style={{ margin: '2px 0', fontSize: '14px' }}><strong>Registrar Action Date:</strong> {selectedApp.registrar_action_date ? new Date(selectedApp.registrar_action_date).toLocaleString() : 'N/A'}</p>
+                  </div>
+                </div>
+
+                {/* Remarks Input */}
+                <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
+                    Remarks (Optional)
+                  </label>
+                  <textarea
+                    value={remarks}
+                    onChange={(e) => setRemarks(e.target.value)}
+                    placeholder="Add remarks for this action..."
+                    rows="2"
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      resize: 'vertical',
+                      outline: 'none',
+                      transition: 'border-color 0.3s ease'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#1a56db'}
+                    onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                  />
+                </div>
+
+                {/* Action Buttons - Confirm & Reject Only */}
+                <div style={{ display: 'flex', gap: '12px', marginTop: '20px', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={handleConfirm}
+                    disabled={actionLoading}
+                    style={{
+                      flex: 1,
+                      minWidth: '150px',
+                      background: actionLoading ? '#93c5fd' : 'linear-gradient(135deg, #10b981, #34d399)',
+                      color: 'white',
+                      border: 'none',
+                      padding: '12px',
+                      borderRadius: '10px',
+                      fontWeight: '600',
+                      cursor: actionLoading ? 'not-allowed' : 'pointer',
+                      boxShadow: '0 4px 15px rgba(16,185,129,0.3)',
+                      transition: 'all 0.3s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!actionLoading) {
+                        e.target.style.transform = 'translateY(-2px)';
+                        e.target.style.boxShadow = '0 8px 25px rgba(16,185,129,0.4)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.transform = 'translateY(0)';
+                      e.target.style.boxShadow = '0 4px 15px rgba(16,185,129,0.3)';
+                    }}
+                  >
+                    ✅ Confirm
+                  </button>
+                  <button
+                    onClick={handleReject}
+                    disabled={actionLoading}
+                    style={{
+                      flex: 1,
+                      minWidth: '150px',
+                      background: actionLoading ? '#93c5fd' : 'linear-gradient(135deg, #ef4444, #f87171)',
+                      color: 'white',
+                      border: 'none',
+                      padding: '12px',
+                      borderRadius: '10px',
+                      fontWeight: '600',
+                      cursor: actionLoading ? 'not-allowed' : 'pointer',
+                      boxShadow: '0 4px 15px rgba(239,68,68,0.3)',
+                      transition: 'all 0.3s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!actionLoading) {
+                        e.target.style.transform = 'translateY(-2px)';
+                        e.target.style.boxShadow = '0 8px 25px rgba(239,68,68,0.4)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.transform = 'translateY(0)';
+                      e.target.style.boxShadow = '0 4px 15px rgba(239,68,68,0.3)';
+                    }}
+                  >
+                    ❌ Reject
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Animations */}
       <style>{`

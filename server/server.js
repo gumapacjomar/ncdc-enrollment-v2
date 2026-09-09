@@ -35,7 +35,7 @@ const db = mysql.createConnection({
     port: process.env.DB_PORT || 3307,
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'ncdc_enrollment_v2'
+    database: process.env.DB_NAME || 'ncdc_enrollment_v3'
 });
 
 db.connect((err) => {
@@ -107,7 +107,7 @@ const profileStorage = multer.diskStorage({
 const profileUpload = multer({
     storage: profileStorage,
     limits: {
-        fileSize: 2 * 1024 * 1024 // 2MB limit
+        fileSize: 2 * 1024 * 1024
     },
     fileFilter: (req, file, cb) => {
         const allowedTypes = /jpeg|jpg|png|gif/;
@@ -147,12 +147,6 @@ const generateStudentId = () => {
             resolve(`NCDC-${padded}`);
         });
     });
-};
-
-// Generate Username (firstname.lastname)
-const generateUsername = (firstName, lastName) => {
-    const base = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`;
-    return base.replace(/[^a-z0-9.]/g, '');
 };
 
 // =============================================
@@ -205,6 +199,7 @@ app.post('/api/apply', upload.fields([
             return res.status(400).json({ error: `Age must be 4-5 years old. Current age: ${age} years old.` });
         }
 
+        // Check if email already exists
         const emailCheckQuery = `SELECT id FROM students WHERE email = ?`;
         db.query(emailCheckQuery, [email], (err, results) => {
             if (err) {
@@ -215,58 +210,79 @@ app.post('/api/apply', upload.fields([
                 return res.status(400).json({ error: 'Email already registered' });
             }
 
-            const studentQuery = `
-                INSERT INTO students (
-                    first_name, middle_name, last_name, suffix,
-                    birth_date, gender, address, contact_number, email,
-                    father_name, father_occupation, father_contact,
-                    mother_name, mother_occupation, mother_contact,
-                    guardian_name, guardian_contact
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `;
-
-            const studentValues = [
-                firstName, middleName || null, lastName, suffix || null,
-                birthDate, gender, address, contactNumber || null, email,
-                fatherName || null, fatherOccupation || null, fatherContact || null,
-                motherName || null, motherOccupation || null, motherContact || null,
-                guardianName || null, guardianContact || null
-            ];
-
-            db.query(studentQuery, studentValues, (err, result) => {
+            // Generate username
+            const username = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`.replace(/[^a-z0-9.]/g, '');
+            
+            // Generate default password
+            const defaultPassword = Math.random().toString(36).slice(-8);
+            
+            // Hash password
+            bcrypt.hash(defaultPassword, 10, (err, hashedPassword) => {
                 if (err) {
-                    return res.status(500).json({ error: 'Student insert error: ' + err.message });
+                    return res.status(500).json({ error: 'Password hashing error: ' + err.message });
                 }
 
-                const studentId = result.insertId;
-
-                const appQuery = `
-                    INSERT INTO applications (
-                        student_id, academic_year,
-                        birth_certificate, immunization_record, medical_clearance, id_picture,
-                        status
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                // Insert into students table
+                const studentQuery = `
+                    INSERT INTO students (
+                        first_name, middle_name, last_name, suffix,
+                        birth_date, gender, address, contact_number, email,
+                        username, password,
+                        father_name, father_occupation, father_contact,
+                        mother_name, mother_occupation, mother_contact,
+                        guardian_name, guardian_contact,
+                        is_first_login
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `;
 
-                const appValues = [
-                    studentId,
-                    academicYear || '2026-2027',
-                    birthCertificate,
-                    immunizationRecord,
-                    medicalClearance,
-                    idPicture,
-                    'pending'
+                const studentValues = [
+                    firstName, middleName || null, lastName, suffix || null,
+                    birthDate, gender, address, contactNumber || null, email,
+                    username, hashedPassword,
+                    fatherName || null, fatherOccupation || null, fatherContact || null,
+                    motherName || null, motherOccupation || null, motherContact || null,
+                    guardianName || null, guardianContact || null,
+                    true
                 ];
 
-                db.query(appQuery, appValues, (err) => {
+                db.query(studentQuery, studentValues, (err, result) => {
                     if (err) {
-                        return res.status(500).json({ error: 'Application insert error: ' + err.message });
+                        return res.status(500).json({ error: 'Student insert error: ' + err.message });
                     }
 
-                    res.status(201).json({
-                        success: true,
-                        message: 'Application submitted successfully!',
-                        studentId: studentId
+                    const studentId = result.insertId;
+
+                    // Insert into applications
+                    const appQuery = `
+                        INSERT INTO applications (
+                            student_id, academic_year,
+                            birth_certificate, immunization_record, medical_clearance, id_picture,
+                            status
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    `;
+
+                    const appValues = [
+                        studentId,
+                        academicYear || '2026-2027',
+                        birthCertificate,
+                        immunizationRecord,
+                        medicalClearance,
+                        idPicture,
+                        'pending'
+                    ];
+
+                    db.query(appQuery, appValues, (err) => {
+                        if (err) {
+                            return res.status(500).json({ error: 'Application insert error: ' + err.message });
+                        }
+
+                        res.status(201).json({
+                            success: true,
+                            message: 'Application submitted successfully!',
+                            studentId: studentId,
+                            username: username,
+                            password: defaultPassword
+                        });
                     });
                 });
             });
@@ -278,7 +294,170 @@ app.post('/api/apply', upload.fields([
 });
 
 // =============================================
-// 2. REGISTRAR - Get Pending Applications
+// 2. LOGIN
+// =============================================
+app.post('/api/login', (req, res) => {
+    const { username, password, role } = req.body;
+
+    // Determine which table to query based on role
+    let tableName = '';
+    let idField = '';
+    let profileFields = '';
+
+    if (role === 'student') {
+        tableName = 'students';
+        idField = 'id';
+        profileFields = 'id, first_name, middle_name, last_name, student_id';
+    } else if (role === 'admin') {
+        tableName = 'admins';
+        idField = 'id';
+        profileFields = 'id, first_name, last_name, employee_id, position, department';
+    } else if (role === 'registrar') {
+        tableName = 'registrars';
+        idField = 'id';
+        profileFields = 'id, first_name, last_name, employee_id, department';
+    } else {
+        // Try all tables
+        return loginWithAllTables(username, password, res);
+    }
+
+    const query = `SELECT * FROM ${tableName} WHERE username = ?`;
+    db.query(query, [username], async (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        
+        if (results.length === 0) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+
+        const user = results[0];
+
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+
+        // Update last login
+        const updateQuery = `UPDATE ${tableName} SET last_login = NOW() WHERE id = ?`;
+        db.query(updateQuery, [user.id]);
+
+        // Generate JWT
+        const token = jwt.sign(
+            { id: user.id, username: user.username, role: role },
+            process.env.JWT_SECRET || 'my_secret_key',
+            { expiresIn: '7d' }
+        );
+
+        // Get profile data
+        const profileQuery = `SELECT ${profileFields} FROM ${tableName} WHERE id = ?`;
+        db.query(profileQuery, [user.id], (err, profileResults) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            const profile = profileResults[0] || {};
+
+            res.json({
+                success: true,
+                token,
+                user: {
+                    id: user.id,
+                    username: user.username,
+                    role: role,
+                    isFirstLogin: user.is_first_login === 1,
+                    firstName: profile.first_name,
+                    lastName: profile.last_name,
+                    studentId: profile.student_id || null,
+                    employeeId: profile.employee_id || null,
+                    email: user.email,
+                    profile: profile
+                }
+            });
+        });
+    });
+});
+
+// Helper function to try all tables
+const loginWithAllTables = (username, password, res) => {
+    const tables = ['students', 'admins', 'registrars'];
+    const roles = ['student', 'admin', 'registrar'];
+    let currentIndex = 0;
+
+    const tryNextTable = () => {
+        if (currentIndex >= tables.length) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+
+        const tableName = tables[currentIndex];
+        const role = roles[currentIndex];
+        let profileFields = '';
+
+        if (role === 'student') {
+            profileFields = 'id, first_name, middle_name, last_name, student_id';
+        } else if (role === 'admin') {
+            profileFields = 'id, first_name, last_name, employee_id, position, department';
+        } else if (role === 'registrar') {
+            profileFields = 'id, first_name, last_name, employee_id, department';
+        }
+
+        const query = `SELECT * FROM ${tableName} WHERE username = ?`;
+        db.query(query, [username], async (err, results) => {
+            if (err) {
+                currentIndex++;
+                return tryNextTable();
+            }
+            
+            if (results.length === 0) {
+                currentIndex++;
+                return tryNextTable();
+            }
+
+            const user = results[0];
+
+            const isMatch = await bcrypt.compare(password, user.password);
+            if (!isMatch) {
+                currentIndex++;
+                return tryNextTable();
+            }
+
+            // Update last login
+            const updateQuery = `UPDATE ${tableName} SET last_login = NOW() WHERE id = ?`;
+            db.query(updateQuery, [user.id]);
+
+            const token = jwt.sign(
+                { id: user.id, username: user.username, role: role },
+                process.env.JWT_SECRET || 'my_secret_key',
+                { expiresIn: '7d' }
+            );
+
+            const profileQuery = `SELECT ${profileFields} FROM ${tableName} WHERE id = ?`;
+            db.query(profileQuery, [user.id], (err, profileResults) => {
+                if (err) return res.status(500).json({ error: err.message });
+
+                const profile = profileResults[0] || {};
+
+                res.json({
+                    success: true,
+                    token,
+                    user: {
+                        id: user.id,
+                        username: user.username,
+                        role: role,
+                        isFirstLogin: user.is_first_login === 1,
+                        firstName: profile.first_name,
+                        lastName: profile.last_name,
+                        studentId: profile.student_id || null,
+                        employeeId: profile.employee_id || null,
+                        email: user.email,
+                        profile: profile
+                    }
+                });
+            });
+        });
+    };
+
+    tryNextTable();
+};
+
+// =============================================
+// 3. REGISTRAR - Get Pending Applications
 // =============================================
 app.get('/api/registrar/pending', (req, res) => {
     const query = `
@@ -305,7 +484,7 @@ app.get('/api/registrar/pending', (req, res) => {
 });
 
 // =============================================
-// 3. REGISTRAR - Get Single Application Details
+// 4. REGISTRAR - Get Single Application Details
 // =============================================
 app.get('/api/registrar/application/:id', (req, res) => {
     const applicationId = req.params.id;
@@ -314,10 +493,11 @@ app.get('/api/registrar/application/:id', (req, res) => {
         SELECT 
             a.*,
             s.*,
-            u.username as registrar_name
+            r.first_name as registrar_first_name,
+            r.last_name as registrar_last_name
         FROM applications a
         JOIN students s ON a.student_id = s.id
-        LEFT JOIN users u ON a.registrar_id = u.id
+        LEFT JOIN registrars r ON a.registrar_id = r.id
         WHERE a.id = ?
     `;
 
@@ -333,7 +513,7 @@ app.get('/api/registrar/application/:id', (req, res) => {
 });
 
 // =============================================
-// 4. REGISTRAR - Approve Application
+// 5. REGISTRAR - Approve Application
 // =============================================
 app.put('/api/registrar/approve/:id', (req, res) => {
     const applicationId = req.params.id;
@@ -361,7 +541,7 @@ app.put('/api/registrar/approve/:id', (req, res) => {
 });
 
 // =============================================
-// 5. REGISTRAR - Decline Application
+// 6. REGISTRAR - Decline Application
 // =============================================
 app.put('/api/registrar/decline/:id', (req, res) => {
     const applicationId = req.params.id;
@@ -389,7 +569,7 @@ app.put('/api/registrar/decline/:id', (req, res) => {
 });
 
 // =============================================
-// 6. ADMIN - Get Approved Applications
+// 7. ADMIN - Get Approved Applications
 // =============================================
 app.get('/api/admin/approved', (req, res) => {
     const query = `
@@ -406,10 +586,11 @@ app.get('/api/admin/approved', (req, res) => {
             a.birth_certificate, a.immunization_record, a.medical_clearance, a.id_picture,
             a.registrar_remarks,
             a.created_at,
-            u.username as registrar_name
+            r.first_name as registrar_first_name,
+            r.last_name as registrar_last_name
         FROM applications a
         JOIN students s ON a.student_id = s.id
-        LEFT JOIN users u ON a.registrar_id = u.id
+        LEFT JOIN registrars r ON a.registrar_id = r.id
         WHERE a.status = 'approved'
         ORDER BY a.created_at DESC
     `;
@@ -421,7 +602,7 @@ app.get('/api/admin/approved', (req, res) => {
 });
 
 // =============================================
-// 7. ADMIN - Confirm Enrollment (FINAL)
+// 8. ADMIN - Confirm Enrollment (Student ID as Password)
 // =============================================
 app.post('/api/admin/confirm/:id', async (req, res) => {
     const applicationId = req.params.id;
@@ -451,42 +632,30 @@ app.post('/api/admin/confirm/:id', async (req, res) => {
             const student = results[0];
             console.log('✅ Student:', student.first_name, student.last_name);
 
+            // Generate Student ID
             const studentId = await generateStudentId();
             console.log('✅ Student ID:', studentId);
-            
-            const username = `${student.first_name.toLowerCase()}.${student.last_name.toLowerCase()}`.replace(/[^a-z0-9.]/g, '');
-            console.log('✅ Username:', username);
-            
+
+            // ===== PASSWORD = STUDENT ID NUMBER (6 digits) =====
             const defaultPassword = studentId.replace('NCDC-', '');
-            console.log('✅ Password:', defaultPassword);
+            console.log('🔑 Default Password:', defaultPassword);
             
             const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
+            // Update student with student_id and password
             await new Promise((resolve, reject) => {
                 db.query(
-                    'UPDATE students SET student_id = ? WHERE id = ?',
-                    [studentId, student.id],
+                    'UPDATE students SET student_id = ?, password = ?, is_first_login = TRUE WHERE id = ?',
+                    [studentId, hashedPassword, student.id],
                     (err) => {
                         if (err) reject(err);
                         else resolve();
                     }
                 );
             });
-            console.log('✅ Student updated');
+            console.log('✅ Student updated with ID and password');
 
-            await new Promise((resolve, reject) => {
-                db.query(
-                    `INSERT INTO users (student_id, student_number, username, password, email, role, is_first_login) 
-                     VALUES (?, ?, ?, ?, ?, 'student', TRUE)`,
-                    [student.id, studentId, username, hashedPassword, student.email],
-                    (err) => {
-                        if (err) reject(err);
-                        else resolve();
-                    }
-                );
-            });
-            console.log('✅ User created with student_number:', studentId);
-
+            // Update application
             await new Promise((resolve, reject) => {
                 db.query(
                     'UPDATE applications SET status = ?, admin_id = ?, admin_remarks = ?, admin_action_date = NOW() WHERE id = ?',
@@ -504,9 +673,10 @@ app.post('/api/admin/confirm/:id', async (req, res) => {
                 message: 'Student confirmed and enrolled successfully!',
                 data: {
                     studentId: studentId,
-                    username: username,
+                    username: student.username,
                     password: defaultPassword,
-                    email: student.email
+                    email: student.email,
+                    note: 'Use your 6-digit Student ID number as your password.'
                 }
             });
 
@@ -518,7 +688,7 @@ app.post('/api/admin/confirm/:id', async (req, res) => {
 });
 
 // =============================================
-// 8. ADMIN - Reject Application
+// 9. ADMIN - Reject Application
 // =============================================
 app.put('/api/admin/reject/:id', (req, res) => {
     const applicationId = req.params.id;
@@ -546,7 +716,7 @@ app.put('/api/admin/reject/:id', (req, res) => {
 });
 
 // =============================================
-// 9. ADMIN - Get All Applications
+// 10. ADMIN - Get All Applications
 // =============================================
 app.get('/api/admin/applications', (req, res) => {
     const query = `
@@ -560,12 +730,14 @@ app.get('/api/admin/applications', (req, res) => {
             a.created_at,
             a.registrar_remarks,
             a.admin_remarks,
-            u1.username as registrar_name,
-            u2.username as admin_name
+            r.first_name as registrar_first_name,
+            r.last_name as registrar_last_name,
+            ad.first_name as admin_first_name,
+            ad.last_name as admin_last_name
         FROM applications a
         JOIN students s ON a.student_id = s.id
-        LEFT JOIN users u1 ON a.registrar_id = u1.id
-        LEFT JOIN users u2 ON a.admin_id = u2.id
+        LEFT JOIN registrars r ON a.registrar_id = r.id
+        LEFT JOIN admins ad ON a.admin_id = ad.id
         ORDER BY a.created_at DESC
     `;
 
@@ -576,7 +748,7 @@ app.get('/api/admin/applications', (req, res) => {
 });
 
 // =============================================
-// 10. ADMIN - Get Rejected Applications
+// 11. ADMIN - Get Rejected Applications
 // =============================================
 app.get('/api/admin/rejected', (req, res) => {
     const query = `
@@ -588,10 +760,11 @@ app.get('/api/admin/rejected', (req, res) => {
             a.status,
             a.admin_remarks,
             a.created_at,
-            u.username as admin_name
+            ad.first_name as admin_first_name,
+            ad.last_name as admin_last_name
         FROM applications a
         JOIN students s ON a.student_id = s.id
-        LEFT JOIN users u ON a.admin_id = u.id
+        LEFT JOIN admins ad ON a.admin_id = ad.id
         WHERE a.status = 'rejected'
         ORDER BY a.created_at DESC
     `;
@@ -603,13 +776,82 @@ app.get('/api/admin/rejected', (req, res) => {
 });
 
 // =============================================
-// 11. ADMIN - Registrar Management
+// 12. ADMIN - Get Single Application Details (FOR VIEW)
+// =============================================
+app.get('/api/admin/application/:id', (req, res) => {
+    const studentId = req.params.id;
+    
+    console.log('🔍 Admin viewing application for student ID:', studentId);
+
+    const query = `
+        SELECT 
+            s.id as student_id,
+            s.student_id as public_id,
+            s.first_name,
+            s.middle_name,
+            s.last_name,
+            s.suffix,
+            s.birth_date,
+            s.gender,
+            s.address,
+            s.contact_number,
+            s.email,
+            s.father_name,
+            s.father_occupation,
+            s.father_contact,
+            s.mother_name,
+            s.mother_occupation,
+            s.mother_contact,
+            s.guardian_name,
+            s.guardian_contact,
+            s.profile_pic,
+            a.id as application_id,
+            a.academic_year,
+            a.birth_certificate,
+            a.immunization_record,
+            a.medical_clearance,
+            a.id_picture,
+            a.status as application_status,
+            a.registrar_remarks,
+            a.admin_remarks,
+            a.created_at as application_date,
+            a.registrar_action_date,
+            a.admin_action_date,
+            r.first_name as registrar_first_name,
+            r.last_name as registrar_last_name,
+            ad.first_name as admin_first_name,
+            ad.last_name as admin_last_name
+        FROM students s
+        LEFT JOIN applications a ON s.id = a.student_id
+        LEFT JOIN registrars r ON a.registrar_id = r.id
+        LEFT JOIN admins ad ON a.admin_id = ad.id
+        WHERE s.id = ?
+        ORDER BY a.id DESC LIMIT 1
+    `;
+
+    db.query(query, [studentId], (err, results) => {
+        if (err) {
+            console.error('❌ Error fetching application:', err);
+            return res.status(500).json({ error: err.message });
+        }
+        
+        if (results.length === 0) {
+            console.log('⚠️ No application found for ID:', req.params.id);
+            return res.status(404).json({ error: 'Application not found' });
+        }
+        
+        console.log('✅ Application found');
+        res.json(results[0]);
+    });
+});
+
+// =============================================
+// 13. ADMIN - Registrar Management
 // =============================================
 app.get('/api/admin/registrars', (req, res) => {
     const query = `
-        SELECT id, employee_id, first_name, last_name, username, email, role, created_at
-        FROM users 
-        WHERE role = 'registrar'
+        SELECT id, employee_id, first_name, last_name, username, email, department, created_at, last_login
+        FROM registrars 
         ORDER BY id DESC
     `;
     db.query(query, (err, results) => {
@@ -619,27 +861,30 @@ app.get('/api/admin/registrars', (req, res) => {
 });
 
 app.post('/api/admin/registrars', async (req, res) => {
-    const { employeeId, firstName, lastName, username, email, password } = req.body;
+    const { employeeId, firstName, lastName, username, email, password, department } = req.body;
 
     if (!employeeId || !firstName || !lastName || !username || !email || !password) {
         return res.status(400).json({ error: 'All fields are required' });
     }
 
-    const checkEmpQuery = `SELECT id FROM users WHERE employee_id = ?`;
+    // Check if employee_id exists
+    const checkEmpQuery = `SELECT id FROM registrars WHERE employee_id = ?`;
     db.query(checkEmpQuery, [employeeId], async (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
         if (results.length > 0) {
             return res.status(400).json({ error: 'Employee ID already exists' });
         }
 
-        const checkUserQuery = `SELECT id FROM users WHERE username = ?`;
+        // Check if username exists
+        const checkUserQuery = `SELECT id FROM registrars WHERE username = ?`;
         db.query(checkUserQuery, [username], async (err, results) => {
             if (err) return res.status(500).json({ error: err.message });
             if (results.length > 0) {
                 return res.status(400).json({ error: 'Username already exists' });
             }
 
-            const checkEmailQuery = `SELECT id FROM users WHERE email = ?`;
+            // Check if email exists
+            const checkEmailQuery = `SELECT id FROM registrars WHERE email = ?`;
             db.query(checkEmailQuery, [email], async (err, results) => {
                 if (err) return res.status(500).json({ error: err.message });
                 if (results.length > 0) {
@@ -649,11 +894,11 @@ app.post('/api/admin/registrars', async (req, res) => {
                 const hashedPassword = await bcrypt.hash(password, 10);
 
                 const insertQuery = `
-                    INSERT INTO users (employee_id, first_name, last_name, username, password, email, role, is_first_login)
-                    VALUES (?, ?, ?, ?, ?, ?, 'registrar', TRUE)
+                    INSERT INTO registrars (employee_id, first_name, last_name, username, password, email, department, is_first_login)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, TRUE)
                 `;
 
-                db.query(insertQuery, [employeeId, firstName, lastName, username, hashedPassword, email], (err, result) => {
+                db.query(insertQuery, [employeeId, firstName, lastName, username, hashedPassword, email, department || null], (err, result) => {
                     if (err) return res.status(500).json({ error: err.message });
                     res.status(201).json({ 
                         success: true, 
@@ -668,9 +913,9 @@ app.post('/api/admin/registrars', async (req, res) => {
 
 app.put('/api/admin/registrars/:id', async (req, res) => {
     const id = req.params.id;
-    const { employeeId, firstName, lastName, username, email } = req.body;
+    const { employeeId, firstName, lastName, username, email, department } = req.body;
 
-    const checkQuery = `SELECT id FROM users WHERE id = ? AND role = 'registrar'`;
+    const checkQuery = `SELECT id FROM registrars WHERE id = ?`;
     db.query(checkQuery, [id], (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
         if (results.length === 0) {
@@ -678,12 +923,12 @@ app.put('/api/admin/registrars/:id', async (req, res) => {
         }
 
         const updateQuery = `
-            UPDATE users 
-            SET employee_id = ?, first_name = ?, last_name = ?, username = ?, email = ?
+            UPDATE registrars 
+            SET employee_id = ?, first_name = ?, last_name = ?, username = ?, email = ?, department = ?
             WHERE id = ?
         `;
 
-        db.query(updateQuery, [employeeId, firstName, lastName, username, email, id], (err) => {
+        db.query(updateQuery, [employeeId, firstName, lastName, username, email, department || null, id], (err) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ success: true, message: 'Registrar updated successfully' });
         });
@@ -693,110 +938,17 @@ app.put('/api/admin/registrars/:id', async (req, res) => {
 app.delete('/api/admin/registrars/:id', (req, res) => {
     const id = req.params.id;
 
-    const checkQuery = `SELECT id, username FROM users WHERE id = ? AND role = 'registrar'`;
+    const checkQuery = `SELECT id FROM registrars WHERE id = ?`;
     db.query(checkQuery, [id], (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
         if (results.length === 0) {
             return res.status(404).json({ error: 'Registrar not found' });
         }
 
-        const deleteQuery = `DELETE FROM users WHERE id = ? AND role = 'registrar'`;
+        const deleteQuery = `DELETE FROM registrars WHERE id = ?`;
         db.query(deleteQuery, [id], (err) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ success: true, message: 'Registrar deleted successfully' });
-        });
-    });
-});
-
-// =============================================
-// 12. LOGIN
-// =============================================
-app.post('/api/login', (req, res) => {
-    const { username, password } = req.body;
-
-    const query = `
-        SELECT u.*, s.first_name, s.last_name, s.student_id 
-        FROM users u
-        LEFT JOIN students s ON u.student_id = s.id
-        WHERE u.username = ?
-    `;
-
-    db.query(query, [username], async (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
-        
-        if (results.length === 0) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-
-        const user = results[0];
-
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-
-        const updateQuery = `UPDATE users SET last_login = NOW() WHERE id = ?`;
-        db.query(updateQuery, [user.id]);
-
-        const token = jwt.sign(
-            { id: user.id, username: user.username, role: user.role },
-            process.env.JWT_SECRET || 'my_secret_key',
-            { expiresIn: '7d' }
-        );
-
-        let studentId = null;
-        let studentNumber = null;
-
-        if (user.role === 'student' && user.student_id) {
-            studentId = user.student_id;
-            studentNumber = user.student_number;
-        }
-
-        res.json({
-            success: true,
-            token,
-            user: {
-                id: user.id,
-                username: user.username,
-                role: user.role,
-                firstName: user.first_name,
-                lastName: user.last_name,
-                studentId: studentId,
-                studentNumber: studentNumber,
-                isFirstLogin: user.is_first_login === 1
-            }
-        });
-    });
-});
-
-// =============================================
-// 13. CHANGE PASSWORD
-// =============================================
-app.post('/api/change-password', async (req, res) => {
-    const { userId, currentPassword, newPassword } = req.body;
-
-    const query = `SELECT * FROM users WHERE id = ?`;
-    db.query(query, [userId], async (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
-        
-        if (results.length === 0) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-
-        const user = results[0];
-
-        const isMatch = await bcrypt.compare(currentPassword, user.password);
-        if (!isMatch) {
-            return res.status(401).json({ error: 'Current password is incorrect' });
-        }
-
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-        const updateQuery = `UPDATE users SET password = ?, is_first_login = FALSE WHERE id = ?`;
-        db.query(updateQuery, [hashedPassword, userId], (err) => {
-            if (err) return res.status(500).json({ error: err.message });
-            
-            res.json({ success: true, message: 'Password changed successfully!' });
         });
     });
 });
@@ -844,7 +996,7 @@ app.get('/api/student/application/:studentId', (req, res) => {
 app.post('/api/student/change-password', async (req, res) => {
     const { userId, currentPassword, newPassword } = req.body;
 
-    const query = `SELECT * FROM users WHERE id = ?`;
+    const query = `SELECT * FROM students WHERE id = ?`;
     db.query(query, [userId], async (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
         
@@ -861,7 +1013,7 @@ app.post('/api/student/change-password', async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-        const updateQuery = `UPDATE users SET password = ?, is_first_login = FALSE WHERE id = ?`;
+        const updateQuery = `UPDATE students SET password = ?, is_first_login = FALSE WHERE id = ?`;
         db.query(updateQuery, [hashedPassword, userId], (err) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ success: true, message: 'Password changed successfully!' });
@@ -902,7 +1054,7 @@ app.post('/api/student/upload-profile-pic/:id', profileUpload.single('profile_pi
     const query = `UPDATE students SET profile_pic = ? WHERE id = ?`;
     db.query(query, [profilePic, studentId], (err) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true, message: 'Profile picture updated successfully!' });
+        res.json({ success: true, message: 'Profile picture updated successfully!', filename: profilePic });
     });
 });
 
@@ -917,10 +1069,9 @@ app.post('/api/forgot-password', (req, res) => {
     }
 
     const checkStudentQuery = `
-        SELECT s.id, s.email, s.first_name, s.last_name, u.id as user_id, u.username
-        FROM students s
-        JOIN users u ON u.student_id = s.id
-        WHERE s.email = ?
+        SELECT id, email, first_name, last_name, username
+        FROM students
+        WHERE email = ?
     `;
 
     db.query(checkStudentQuery, [email], (err, results) => {
@@ -976,10 +1127,9 @@ app.get('/api/admin/password-requests', (req, res) => {
             pr.created_at,
             s.first_name,
             s.last_name,
-            u.id as user_id
+            s.username
         FROM password_reset_requests pr
         JOIN students s ON pr.student_id = s.id
-        JOIN users u ON u.student_id = s.id
         WHERE pr.status = 'pending'
         ORDER BY pr.created_at DESC
     `;
@@ -997,32 +1147,17 @@ app.get('/api/admin/password-requests', (req, res) => {
 // 21. ADMIN - Generate Temporary Password
 // =============================================
 app.post('/api/admin/generate-temp-password', async (req, res) => {
-    const { userId, studentId, requestId } = req.body;
+    const { studentId, requestId } = req.body;
 
-    if (!userId && !studentId) {
-        return res.status(400).json({ error: 'User ID or Student ID is required' });
+    if (!studentId) {
+        return res.status(400).json({ error: 'Student ID is required' });
     }
 
     const tempPassword = Math.random().toString(36).slice(-8);
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-    let query = '';
-    let params = [];
-
-    if (userId) {
-        query = 'UPDATE users SET password = ?, is_first_login = TRUE WHERE id = ?';
-        params = [hashedPassword, userId];
-    } else if (studentId) {
-        query = `
-            UPDATE users u
-            JOIN students s ON u.student_id = s.id
-            SET u.password = ?, u.is_first_login = TRUE
-            WHERE s.id = ?
-        `;
-        params = [hashedPassword, studentId];
-    }
-
-    db.query(query, params, (err) => {
+    const query = `UPDATE students SET password = ?, is_first_login = TRUE WHERE id = ?`;
+    db.query(query, [hashedPassword, studentId], (err) => {
         if (err) {
             console.error('❌ Error generating temp password:', err);
             return res.status(500).json({ error: 'Failed to generate temporary password' });
@@ -1091,32 +1226,15 @@ app.delete('/api/admin/student/:id', (req, res) => {
 });
 
 // =============================================
-// 24. ADMIN - Delete User Account
-// =============================================
-app.delete('/api/admin/user/:studentId', (req, res) => {
-    const studentId = req.params.studentId;
-
-    const query = `DELETE FROM users WHERE student_id = ?`;
-    db.query(query, [studentId], (err, result) => {
-        if (err) {
-            console.error('❌ Error deleting user:', err);
-            return res.status(500).json({ error: err.message });
-        }
-        
-        res.json({ success: true, message: 'User deleted successfully!' });
-    });
-});
-
-// =============================================
-// 25. ADMIN - Get Profile
+// 24. ADMIN - Get Profile
 // =============================================
 app.get('/api/admin/profile/:id', (req, res) => {
     const userId = req.params.id;
 
     const query = `
-        SELECT id, employee_id, first_name, last_name, username, email, role, profile_pic, created_at
-        FROM users 
-        WHERE id = ? AND role = 'admin'
+        SELECT id, employee_id, first_name, last_name, username, email, position, department, profile_pic, created_at, last_login
+        FROM admins 
+        WHERE id = ?
     `;
 
     db.query(query, [userId], (err, results) => {
@@ -1129,14 +1247,14 @@ app.get('/api/admin/profile/:id', (req, res) => {
 });
 
 // =============================================
-// 26. ADMIN - Update Profile
+// 25. ADMIN - Update Profile
 // =============================================
 app.put('/api/admin/profile/:id', profileUpload.single('profile_pic'), (req, res) => {
     const userId = req.params.id;
-    const { first_name, last_name, email, employee_id } = req.body;
+    const { first_name, last_name, email, employee_id, position, department } = req.body;
     const profilePic = req.file ? req.file.filename : null;
 
-    const checkQuery = `SELECT id FROM users WHERE id = ? AND role = 'admin'`;
+    const checkQuery = `SELECT id FROM admins WHERE id = ?`;
     db.query(checkQuery, [userId], (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
         if (results.length === 0) {
@@ -1144,10 +1262,10 @@ app.put('/api/admin/profile/:id', profileUpload.single('profile_pic'), (req, res
         }
 
         let query = `
-            UPDATE users 
-            SET first_name = ?, last_name = ?, email = ?, employee_id = ?
+            UPDATE admins 
+            SET first_name = ?, last_name = ?, email = ?, employee_id = ?, position = ?, department = ?
         `;
-        let params = [first_name, last_name, email, employee_id];
+        let params = [first_name, last_name, email, employee_id, position || null, department || null];
 
         if (profilePic) {
             query += `, profile_pic = ?`;
@@ -1165,15 +1283,15 @@ app.put('/api/admin/profile/:id', profileUpload.single('profile_pic'), (req, res
 });
 
 // =============================================
-// 27. REGISTRAR - Get Profile
+// 26. REGISTRAR - Get Profile
 // =============================================
 app.get('/api/registrar/profile/:id', (req, res) => {
     const userId = req.params.id;
 
     const query = `
-        SELECT id, employee_id, first_name, last_name, username, email, role, profile_pic, created_at, last_login
-        FROM users 
-        WHERE id = ? AND role = 'registrar'
+        SELECT id, employee_id, first_name, last_name, username, email, department, profile_pic, created_at, last_login
+        FROM registrars 
+        WHERE id = ?
     `;
 
     db.query(query, [userId], (err, results) => {
@@ -1186,16 +1304,11 @@ app.get('/api/registrar/profile/:id', (req, res) => {
 });
 
 // =============================================
-// 28. REGISTRAR - Update Profile (FIXED - with profile_pic upload)
+// 27. REGISTRAR - Update Profile
 // =============================================
 app.put('/api/registrar/profile/:id', profileUpload.single('profile_pic'), (req, res) => {
     const userId = req.params.id;
-    
-    // Get data from req.body (multipart form data)
-    const first_name = req.body.first_name;
-    const last_name = req.body.last_name;
-    const email = req.body.email;
-    const employee_id = req.body.employee_id;
+    const { first_name, last_name, email, employee_id, department } = req.body;
     const profilePic = req.file ? req.file.filename : null;
 
     console.log('📝 Updating registrar profile:');
@@ -1204,14 +1317,14 @@ app.put('/api/registrar/profile/:id', profileUpload.single('profile_pic'), (req,
     console.log('  Last Name:', last_name);
     console.log('  Email:', email);
     console.log('  Employee ID:', employee_id);
+    console.log('  Department:', department);
     console.log('  Profile Pic:', profilePic);
 
-    // Validate required fields
     if (!first_name || !last_name || !email) {
         return res.status(400).json({ error: 'First name, last name, and email are required' });
     }
 
-    const checkQuery = `SELECT id FROM users WHERE id = ? AND role = 'registrar'`;
+    const checkQuery = `SELECT id FROM registrars WHERE id = ?`;
     db.query(checkQuery, [userId], (err, results) => {
         if (err) {
             console.error('❌ Error checking registrar:', err);
@@ -1222,10 +1335,10 @@ app.put('/api/registrar/profile/:id', profileUpload.single('profile_pic'), (req,
         }
 
         let query = `
-            UPDATE users 
-            SET first_name = ?, last_name = ?, email = ?, employee_id = ?
+            UPDATE registrars 
+            SET first_name = ?, last_name = ?, email = ?, employee_id = ?, department = ?
         `;
-        let params = [first_name, last_name, email, employee_id || null];
+        let params = [first_name, last_name, email, employee_id || null, department || null];
 
         if (profilePic) {
             query += `, profile_pic = ?`;
@@ -1247,11 +1360,300 @@ app.put('/api/registrar/profile/:id', profileUpload.single('profile_pic'), (req,
 });
 
 // =============================================
+// 28. CHANGE PASSWORD (for admin/registrar)
+// =============================================
+app.post('/api/change-password', async (req, res) => {
+    const { userId, currentPassword, newPassword, role } = req.body;
+
+    let tableName = '';
+    if (role === 'student') tableName = 'students';
+    else if (role === 'admin') tableName = 'admins';
+    else if (role === 'registrar') tableName = 'registrars';
+    else return res.status(400).json({ error: 'Invalid role' });
+
+    const query = `SELECT * FROM ${tableName} WHERE id = ?`;
+    db.query(query, [userId], async (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        
+        if (results.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const user = results[0];
+
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            return res.status(401).json({ error: 'Current password is incorrect' });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        const updateQuery = `UPDATE ${tableName} SET password = ?, is_first_login = FALSE WHERE id = ?`;
+        db.query(updateQuery, [hashedPassword, userId], (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true, message: 'Password changed successfully!' });
+        });
+    });
+});
+
+// =============================================
+// 29. REGISTRAR - Update Application Details (EDIT)
+// =============================================
+app.put('/api/registrar/application/:id', (req, res) => {
+    const applicationId = req.params.id;
+    const {
+        first_name, middle_name, last_name, suffix,
+        birth_date, gender, address, contact_number, email,
+        father_name, father_occupation, father_contact,
+        mother_name, mother_occupation, mother_contact,
+        guardian_name, guardian_contact,
+        academic_year, registrar_remarks
+    } = req.body;
+
+    console.log('📝 Registrar editing application:', applicationId);
+
+    // First, get the student_id from application
+    const getStudentQuery = `SELECT student_id FROM applications WHERE id = ?`;
+    db.query(getStudentQuery, [applicationId], (err, results) => {
+        if (err) {
+            console.error('❌ Error:', err);
+            return res.status(500).json({ error: err.message });
+        }
+
+        if (results.length === 0) {
+            return res.status(404).json({ error: 'Application not found' });
+        }
+
+        const studentId = results[0].student_id;
+
+        // Update student information
+        const updateStudentQuery = `
+            UPDATE students 
+            SET 
+                first_name = ?,
+                middle_name = ?,
+                last_name = ?,
+                suffix = ?,
+                birth_date = ?,
+                gender = ?,
+                address = ?,
+                contact_number = ?,
+                email = ?,
+                father_name = ?,
+                father_occupation = ?,
+                father_contact = ?,
+                mother_name = ?,
+                mother_occupation = ?,
+                mother_contact = ?,
+                guardian_name = ?,
+                guardian_contact = ?
+            WHERE id = ?
+        `;
+
+        const studentParams = [
+            first_name, middle_name || null, last_name, suffix || null,
+            birth_date, gender, address, contact_number, email,
+            father_name || null, father_occupation || null, father_contact || null,
+            mother_name || null, mother_occupation || null, mother_contact || null,
+            guardian_name || null, guardian_contact || null,
+            studentId
+        ];
+
+        db.query(updateStudentQuery, studentParams, (err) => {
+            if (err) {
+                console.error('❌ Error updating student:', err);
+                return res.status(500).json({ error: 'Failed to update student: ' + err.message });
+            }
+
+            // Update application (academic_year and registrar_remarks only)
+            const updateAppQuery = `
+                UPDATE applications 
+                SET 
+                    academic_year = ?,
+                    registrar_remarks = ?
+                WHERE id = ?
+            `;
+
+            db.query(updateAppQuery, [academic_year, registrar_remarks || null, applicationId], (err) => {
+                if (err) {
+                    console.error('❌ Error updating application:', err);
+                    return res.status(500).json({ error: 'Failed to update application: ' + err.message });
+                }
+
+                console.log('✅ Application updated successfully');
+                res.json({
+                    success: true,
+                    message: 'Application updated successfully!'
+                });
+            });
+        });
+    });
+});
+
+// =============================================
+// 30. ADMIN - Return Application to Registrar
+// =============================================
+app.put('/api/admin/return/:id', (req, res) => {
+    const applicationId = req.params.id;
+    const { adminId, remarks } = req.body;
+
+    console.log('🔄 Admin returning application:', applicationId);
+
+    const query = `
+        UPDATE applications 
+        SET 
+            status = 'approved',
+            admin_id = ?,
+            admin_remarks = ?,
+            admin_action_date = NOW()
+        WHERE id = ?
+    `;
+
+    db.query(query, [adminId, remarks || 'Returned to Registrar by Admin', applicationId], (err, result) => {
+        if (err) {
+            console.error('❌ Error returning application:', err);
+            return res.status(500).json({ error: err.message });
+        }
+        
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Application not found' });
+        }
+
+        console.log('✅ Application returned to registrar');
+        res.json({ 
+            success: true, 
+            message: 'Application returned to Registrar successfully!' 
+        });
+    });
+});
+
+// =============================================
+// 31. SETTINGS - Get Settings
+// =============================================
+app.get('/api/settings', (req, res) => {
+    console.log('📋 Settings requested');
+    
+    // Return default settings
+    res.json({
+        academicYear: '2026-2027',
+        semester: '1st Semester',
+        ageMin: 4,
+        ageMax: 5,
+        requirements: ['Birth Certificate', 'Immunization Record', 'Medical Clearance', '2x2 ID Picture']
+    });
+});
+
+// =============================================
+// 32. SETTINGS - Update Settings
+// =============================================
+app.put('/api/settings', (req, res) => {
+    const { academicYear, semester, ageMin, ageMax, requirements } = req.body;
+    
+    console.log('📝 Settings updated:', req.body);
+    
+    // For now, just log and return success
+    // You can add database storage later
+    res.json({
+        success: true,
+        message: 'Settings saved successfully!',
+        data: {
+            academicYear,
+            semester,
+            ageMin,
+            ageMax,
+            requirements
+        }
+    });
+});
+
+// =============================================
+// 33. ADMIN - Get Reports Data
+// =============================================
+app.get('/api/admin/reports', (req, res) => {
+    console.log('📊 Reports requested');
+
+    // Get all applications with student and staff info
+    const query = `
+        SELECT 
+            a.id as application_id,
+            a.student_id,
+            a.academic_year,
+            a.status,
+            a.created_at,
+            a.registrar_remarks,
+            a.admin_remarks,
+            a.registrar_action_date,
+            a.admin_action_date,
+            s.first_name,
+            s.middle_name,
+            s.last_name,
+            s.suffix,
+            s.email,
+            s.contact_number,
+            s.birth_date,
+            s.gender,
+            s.address,
+            s.student_id as student_number,
+            r.first_name as registrar_first_name,
+            r.last_name as registrar_last_name,
+            ad.first_name as admin_first_name,
+            ad.last_name as admin_last_name
+        FROM applications a
+        JOIN students s ON a.student_id = s.id
+        LEFT JOIN registrars r ON a.registrar_id = r.id
+        LEFT JOIN admins ad ON a.admin_id = ad.id
+        ORDER BY a.created_at DESC
+    `;
+
+    db.query(query, (err, results) => {
+        if (err) {
+            console.error('❌ Error fetching reports:', err);
+            return res.status(500).json({ error: err.message });
+        }
+
+        // Calculate statistics
+        const total = results.length;
+        const pending = results.filter(a => a.status === 'pending').length;
+        const approved = results.filter(a => a.status === 'approved').length;
+        const confirmed = results.filter(a => a.status === 'confirmed').length;
+        const rejected = results.filter(a => a.status === 'rejected').length;
+        const declined = results.filter(a => a.status === 'declined').length;
+
+        // Monthly data
+        const months = {};
+        results.forEach(app => {
+            const date = new Date(app.created_at);
+            const monthYear = `${date.toLocaleString('default', { month: 'short' })} ${date.getFullYear()}`;
+            if (!months[monthYear]) {
+                months[monthYear] = 0;
+            }
+            months[monthYear]++;
+        });
+        const monthlyData = Object.entries(months).map(([month, count]) => ({ month, count }));
+
+        res.json({
+            success: true,
+            data: results,
+            stats: {
+                total,
+                pending,
+                approved,
+                confirmed,
+                rejected,
+                declined
+            },
+            monthlyData
+        });
+    });
+});
+
+// =============================================
 // START SERVER
 // =============================================
 app.listen(PORT, () => {
     console.log(`🚀 Server is running on http://localhost:${PORT}`);
     console.log(`📧 Email service: Disabled`);
     console.log(`📁 Upload directory: ${uploadDir}`);
+    console.log(`📊 Using separate tables: students, admins, registrars`);
+    console.log(`⚙️  Settings endpoints enabled`);
 });
-
