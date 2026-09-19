@@ -18,8 +18,18 @@ const PORT = process.env.PORT || 5000;
 // MIDDLEWARE
 // =============================================
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:3000'],
-    credentials: true
+    origin: [
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'https://ncdc-enrollment-v2.vercel.app',
+        'https://ncdc-enrollment-v2-git-main-marho.vercel.app',
+        'https://ncdcenrollment.bscs4a.com',
+        'https://ncdcenrollment.com',
+        'https://www.ncdcenrollment.com'
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
