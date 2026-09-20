@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import API from '../../services/api';
+import UPLOADS_URL from '../../services/uploads';
 
 const RegistrarDashboard = () => {
   const navigate = useNavigate();
@@ -84,7 +85,7 @@ const RegistrarDashboard = () => {
     try {
       const response = await API.get(`/registrar/profile/${user.id}`);
       if (response.data.profile_pic) {
-        setProfilePic(`http://localhost:5000/uploads/profiles/${response.data.profile_pic}`);
+        setProfilePic(`${UPLOADS_URL}/profiles/${response.data.profile_pic}`);
       }
     } catch (error) {
       console.error('Error fetching profile pic:', error);

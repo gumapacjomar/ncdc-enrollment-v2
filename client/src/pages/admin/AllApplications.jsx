@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import API from '../../services/api';
+import UPLOADS_URL from '../../services/uploads';
 
 const AllApplications = () => {
   const navigate = useNavigate();
@@ -452,19 +453,19 @@ const AllApplications = () => {
                     <h3 style={{ fontSize: '16px', color: '#1a56db', marginTop: '16px', marginBottom: '12px' }}>📎 Requirements</h3>
                     <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px' }}>
                       {selectedStudent.birth_certificate ? (
-                        <p><a href={`http://localhost:5000/uploads/requirements/${selectedStudent.birth_certificate}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>📄 Birth Certificate</a></p>
+                        <p><a href={`${UPLOADS_URL}/requirements/${selectedStudent.birth_certificate}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>📄 Birth Certificate</a></p>
                       ) : <p>📄 Birth Certificate: <span style={{ color: '#6b7280' }}>Not uploaded</span></p>}
                       
                       {selectedStudent.immunization_record ? (
-                        <p><a href={`http://localhost:5000/uploads/requirements/${selectedStudent.immunization_record}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>📄 Immunization Record</a></p>
+                        <p><a href={`${UPLOADS_URL}/requirements/${selectedStudent.immunization_record}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>📄 Immunization Record</a></p>
                       ) : <p>📄 Immunization Record: <span style={{ color: '#6b7280' }}>Not uploaded</span></p>}
                       
                       {selectedStudent.medical_clearance ? (
-                        <p><a href={`http://localhost:5000/uploads/requirements/${selectedStudent.medical_clearance}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>📄 Medical Clearance</a></p>
+                        <p><a href={`${UPLOADS_URL}/requirements/${selectedStudent.medical_clearance}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>📄 Medical Clearance</a></p>
                       ) : <p>📄 Medical Clearance: <span style={{ color: '#6b7280' }}>Not uploaded</span></p>}
                       
                       {selectedStudent.id_picture ? (
-                        <p><a href={`http://localhost:5000/uploads/requirements/${selectedStudent.id_picture}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>🖼️ ID Picture</a></p>
+                        <p><a href={`${UPLOADS_URL}/requirements/${selectedStudent.id_picture}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>🖼️ ID Picture</a></p>
                       ) : <p>🖼️ ID Picture: <span style={{ color: '#6b7280' }}>Not uploaded</span></p>}
                     </div>
                   </div>

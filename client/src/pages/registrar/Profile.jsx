@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import API from '../../services/api';
+import UPLOADS_URL from '../../services/uploads';
 
 const RegistrarProfile = () => {
   const navigate = useNavigate();
@@ -42,7 +43,7 @@ const RegistrarProfile = () => {
         employee_id: response.data.employee_id || ''
       });
       if (response.data.profile_pic) {
-        setProfilePicPreview(`http://localhost:5000/uploads/profiles/${response.data.profile_pic}`);
+        setProfilePicPreview(`${UPLOADS_URL}/profiles/${response.data.profile_pic}`);
       }
     } catch (error) {
       console.error('Error fetching registrar profile:', error);
@@ -129,7 +130,7 @@ const RegistrarProfile = () => {
       employee_id: registrar?.employee_id || ''
     });
     setProfilePic(null);
-    setProfilePicPreview(registrar?.profile_pic ? `http://localhost:5000/uploads/profiles/${registrar.profile_pic}` : null);
+    setProfilePicPreview(registrar?.profile_pic ? `${UPLOADS_URL}/profiles/${registrar.profile_pic}` : null);
   };
 
   if (loading) {

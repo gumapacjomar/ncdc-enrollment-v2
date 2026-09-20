@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import API from '../../services/api';
+import UPLOADS_URL from '../../services/uploads';
 
 const StudentProfile = () => {
   const navigate = useNavigate();
@@ -58,7 +59,7 @@ const StudentProfile = () => {
       setFormData(response.data);
       
       if (response.data.profile_pic) {
-        setProfilePicPreview(`http://localhost:5000/uploads/profiles/${response.data.profile_pic}`);
+        setProfilePicPreview(`${UPLOADS_URL}/profiles/${response.data.profile_pic}`);
       }
     } catch (error) {
       console.error('❌ Error fetching student profile:', error);
@@ -131,7 +132,7 @@ const StudentProfile = () => {
     setEditMode(false);
     setFormData(student);
     setProfilePic(null);
-    setProfilePicPreview(student?.profile_pic ? `http://localhost:5000/uploads/profiles/${student.profile_pic}` : null);
+    setProfilePicPreview(student?.profile_pic ? `${UPLOADS_URL}/profiles/${student.profile_pic}` : null);
   };
 
   // ========== CHANGE PASSWORD FUNCTIONS ==========

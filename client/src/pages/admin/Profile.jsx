@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import API from '../../services/api';
+import UPLOADS_URL from '../../services/uploads';
 
 const AdminProfile = () => {
   const navigate = useNavigate();
@@ -44,7 +45,7 @@ const AdminProfile = () => {
         employee_id: response.data.employee_id || ''
       });
       if (response.data.profile_pic) {
-        setProfilePicPreview(`http://localhost:5000/uploads/profiles/${response.data.profile_pic}`);
+        setProfilePicPreview(`${UPLOADS_URL}/profiles/${response.data.profile_pic}`);
       }
     } catch (error) {
       console.error('Error fetching admin profile:', error);
@@ -123,7 +124,7 @@ const AdminProfile = () => {
       username: admin?.username || '',
       employee_id: admin?.employee_id || ''
     });
-    setProfilePicPreview(admin?.profile_pic ? `http://localhost:5000/uploads/profiles/${admin.profile_pic}` : null);
+    setProfilePicPreview(admin?.profile_pic ? `${UPLOADS_URL}/profiles/${admin.profile_pic}` : null);
     setProfilePic(null);
     setMessage('');
   };

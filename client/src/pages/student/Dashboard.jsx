@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import API from '../../services/api';
+import UPLOADS_URL from '../../services/uploads';
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
@@ -64,7 +65,7 @@ const StudentDashboard = () => {
       setStudent(studentResponse.data);
       
       if (studentResponse.data.profile_pic) {
-        setProfilePicPreview(`http://localhost:5000/uploads/profiles/${studentResponse.data.profile_pic}`);
+        setProfilePicPreview(`${UPLOADS_URL}/profiles/${studentResponse.data.profile_pic}`);
       }
 
       const appResponse = await API.get(`/student/application/${finalId}`);
@@ -147,7 +148,7 @@ const StudentDashboard = () => {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setUploadMessage({ type: 'success', text: '✅ ' + response.data.message });
-      setProfilePicPreview(`http://localhost:5000/uploads/profiles/${response.data.filename}`);
+      setProfilePicPreview(`${UPLOADS_URL}/profiles/${response.data.filename}`);
       setTimeout(() => setUploadMessage(''), 3000);
     } catch (error) {
       setUploadMessage({ type: 'error', text: '❌ Failed to upload profile picture' });

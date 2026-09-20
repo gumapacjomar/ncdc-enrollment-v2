@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import API from '../../services/api';
+import UPLOADS_URL from '../../services/uploads';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -45,7 +46,7 @@ const AdminDashboard = () => {
     try {
       const response = await API.get(`/admin/profile/${user.id}`);
       if (response.data.profile_pic) {
-        setProfilePic(`http://localhost:5000/uploads/profiles/${response.data.profile_pic}`);
+        setProfilePic(`${UPLOADS_URL}/profiles/${response.data.profile_pic}`);
       }
     } catch (error) {
       console.error('Error fetching profile pic:', error);
@@ -893,22 +894,22 @@ const AdminDashboard = () => {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', background: '#f8fafc', padding: '12px', borderRadius: '8px' }}>
                     <p style={{ margin: '2px 0', fontSize: '14px' }}>
                       {selectedApp.birth_certificate ? (
-                        <a href={`http://localhost:5000/uploads/requirements/${selectedApp.birth_certificate}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>📄 Birth Certificate</a>
+                        <a href={`${UPLOADS_URL}/requirements/${selectedApp.birth_certificate}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>📄 Birth Certificate</a>
                       ) : '📄 Birth Certificate: Not uploaded'}
                     </p>
                     <p style={{ margin: '2px 0', fontSize: '14px' }}>
                       {selectedApp.immunization_record ? (
-                        <a href={`http://localhost:5000/uploads/requirements/${selectedApp.immunization_record}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>📄 Immunization Record</a>
+                        <a href={`${UPLOADS_URL}/requirements/${selectedApp.immunization_record}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>📄 Immunization Record</a>
                       ) : '📄 Immunization: Not uploaded'}
                     </p>
                     <p style={{ margin: '2px 0', fontSize: '14px' }}>
                       {selectedApp.medical_clearance ? (
-                        <a href={`http://localhost:5000/uploads/requirements/${selectedApp.medical_clearance}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>📄 Medical Clearance</a>
+                        <a href={`${UPLOADS_URL}/requirements/${selectedApp.medical_clearance}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>📄 Medical Clearance</a>
                       ) : '📄 Medical Clearance: Not uploaded'}
                     </p>
                     <p style={{ margin: '2px 0', fontSize: '14px' }}>
                       {selectedApp.id_picture ? (
-                        <a href={`http://localhost:5000/uploads/requirements/${selectedApp.id_picture}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>🖼️ ID Picture</a>
+                        <a href={`${UPLOADS_URL}/requirements/${selectedApp.id_picture}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a56db' }}>🖼️ ID Picture</a>
                       ) : '🖼️ ID Picture: Not uploaded'}
                     </p>
                   </div>
