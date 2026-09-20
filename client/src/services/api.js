@@ -1,7 +1,12 @@
 import axios from 'axios';
 
+// Dynamic API URL — local vs production
+const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:5000/api'
+    : 'https://ncdcenrollment.bscs4a.com/api';
+
 const API = axios.create({
-    baseURL: 'https://ncdcenrollment.bscs4a.com/api',
+    baseURL: API_URL,
     headers: {
         'Content-Type': 'application/json'
     }
