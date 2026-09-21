@@ -383,10 +383,16 @@ const RegistrarDashboard = () => {
     return labels[status] || status;
   };
 
+  // ✅ UPDATED MENU ITEMS WITH NEW PAGES
   const menuItems = [
-    { id: 'applications', icon: '📋', label: 'Applications' },
-    { id: 'enrolled', icon: '🎓', label: 'Enrolled Students' },
-    { id: 'settings', icon: '⚙️', label: 'Settings' }
+    { id: 'applications', icon: '📋', label: 'Applications', type: 'internal' },
+    { id: 'enrolled', icon: '🎓', label: 'Enrolled Students', type: 'internal' },
+    { id: 'sections', icon: '🏫', label: 'Sections', type: 'link', path: '/registrar/sections' },
+    { id: 'subjects', icon: '📚', label: 'Subjects', type: 'link', path: '/registrar/subjects' },
+    { id: 'enrollments', icon: '📝', label: 'Enrollments', type: 'link', path: '/registrar/enrollments' },
+    { id: 'grades', icon: '📊', label: 'Grades', type: 'link', path: '/registrar/grades' },
+    { id: 'remarks', icon: '💬', label: 'Remarks', type: 'link', path: '/registrar/remarks' },
+    { id: 'settings', icon: '⚙️', label: 'Settings', type: 'internal' }
   ];
 
   const inputStyle = {
@@ -627,7 +633,6 @@ const RegistrarDashboard = () => {
                       {new Date(app.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                      {/* View Button ONLY */}
                       <button
                         onClick={() => viewApplication(app)}
                         style={{
@@ -1046,58 +1051,98 @@ const RegistrarDashboard = () => {
           overflowY: 'auto',
           overflowX: 'hidden'
         }}>
-          {menuItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => {
-                setActiveMenu(item.id);
-                setSearchTerm('');
-                setCurrentPage(1);
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: 'none',
-                background: activeMenu === item.id ? 'rgba(59,130,246,0.08)' : 'transparent',
-                color: activeMenu === item.id ? '#1a56db' : '#6b7280',
-                fontWeight: activeMenu === item.id ? '600' : '500',
-                cursor: 'pointer',
-                fontSize: '14px',
-                transition: 'all 0.3s ease',
-                marginBottom: '2px',
-                position: 'relative'
-              }}
-              onMouseEnter={(e) => {
-                if (activeMenu !== item.id) {
-                  e.currentTarget.style.background = 'rgba(0,0,0,0.03)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (activeMenu !== item.id) {
-                  e.currentTarget.style.background = 'transparent';
-                }
-              }}
-            >
-              {activeMenu === item.id && (
-                <span style={{
-                  position: 'absolute',
-                  left: '0',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  width: '3px',
-                  height: '24px',
-                  background: 'linear-gradient(180deg, #1a56db, #3b82f6)',
-                  borderRadius: '0 4px 4px 0'
-                }} />
-              )}
-              <span style={{ fontSize: '18px', width: '24px' }}>{item.icon}</span>
-              {item.label}
-            </button>
-          ))}
+          {menuItems.map((item) => {
+            // For NEW pages (with type: 'link'), use Link
+            if (item.type === 'link') {
+              return (
+                <Link
+                  key={item.id}
+                  to={item.path}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    textDecoration: 'none',
+                    background: 'transparent',
+                    color: '#6b7280',
+                    fontWeight: '500',
+                    fontSize: '14px',
+                    transition: 'all 0.3s ease',
+                    marginBottom: '2px',
+                    position: 'relative'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(0,0,0,0.03)';
+                    e.currentTarget.style.transform = 'translateX(4px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.transform = 'translateX(0)';
+                  }}
+                >
+                  <span style={{ fontSize: '18px', width: '24px' }}>{item.icon}</span>
+                  {item.label}
+                </Link>
+              );
+            }
+            
+            // For EXISTING internal menus, use button
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setActiveMenu(item.id);
+                  setSearchTerm('');
+                  setCurrentPage(1);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: activeMenu === item.id ? 'rgba(59,130,246,0.08)' : 'transparent',
+                  color: activeMenu === item.id ? '#1a56db' : '#6b7280',
+                  fontWeight: activeMenu === item.id ? '600' : '500',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  transition: 'all 0.3s ease',
+                  marginBottom: '2px',
+                  position: 'relative'
+                }}
+                onMouseEnter={(e) => {
+                  if (activeMenu !== item.id) {
+                    e.currentTarget.style.background = 'rgba(0,0,0,0.03)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeMenu !== item.id) {
+                    e.currentTarget.style.background = 'transparent';
+                  }
+                }}
+              >
+                {activeMenu === item.id && (
+                  <span style={{
+                    position: 'absolute',
+                    left: '0',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: '3px',
+                    height: '24px',
+                    background: 'linear-gradient(180deg, #1a56db, #3b82f6)',
+                    borderRadius: '0 4px 4px 0'
+                  }} />
+                )}
+                <span style={{ fontSize: '18px', width: '24px' }}>{item.icon}</span>
+                {item.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Logout Button */}
@@ -1495,7 +1540,6 @@ const RegistrarDashboard = () => {
               </div>
             ) : editData ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                {/* Personal Information */}
                 <div style={{ gridColumn: '1 / -1' }}>
                   <h3 style={{ fontSize: '16px', color: '#1a56db', marginBottom: '12px', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px' }}>
                     👤 Personal Information
@@ -1504,42 +1548,19 @@ const RegistrarDashboard = () => {
 
                 <div>
                   <label style={labelStyle}>First Name *</label>
-                  <input
-                    type="text"
-                    name="first_name"
-                    value={editData.first_name || ''}
-                    onChange={handleEditChange}
-                    style={inputStyle}
-                  />
+                  <input type="text" name="first_name" value={editData.first_name || ''} onChange={handleEditChange} style={inputStyle} />
                 </div>
                 <div>
                   <label style={labelStyle}>Middle Name</label>
-                  <input
-                    type="text"
-                    name="middle_name"
-                    value={editData.middle_name || ''}
-                    onChange={handleEditChange}
-                    style={inputStyle}
-                  />
+                  <input type="text" name="middle_name" value={editData.middle_name || ''} onChange={handleEditChange} style={inputStyle} />
                 </div>
                 <div>
                   <label style={labelStyle}>Last Name *</label>
-                  <input
-                    type="text"
-                    name="last_name"
-                    value={editData.last_name || ''}
-                    onChange={handleEditChange}
-                    style={inputStyle}
-                  />
+                  <input type="text" name="last_name" value={editData.last_name || ''} onChange={handleEditChange} style={inputStyle} />
                 </div>
                 <div>
                   <label style={labelStyle}>Suffix</label>
-                  <select
-                    name="suffix"
-                    value={editData.suffix || ''}
-                    onChange={handleEditChange}
-                    style={inputStyle}
-                  >
+                  <select name="suffix" value={editData.suffix || ''} onChange={handleEditChange} style={inputStyle}>
                     <option value="">None</option>
                     <option value="Jr.">Jr.</option>
                     <option value="Sr.">Sr.</option>
@@ -1550,58 +1571,28 @@ const RegistrarDashboard = () => {
                 </div>
                 <div>
                   <label style={labelStyle}>Birth Date</label>
-                  <input
-                    type="date"
-                    name="birth_date"
-                    value={editData.birth_date || ''}
-                    onChange={handleEditChange}
-                    style={inputStyle}
-                  />
+                  <input type="date" name="birth_date" value={editData.birth_date || ''} onChange={handleEditChange} style={inputStyle} />
                 </div>
                 <div>
                   <label style={labelStyle}>Gender</label>
-                  <select
-                    name="gender"
-                    value={editData.gender || ''}
-                    onChange={handleEditChange}
-                    style={inputStyle}
-                  >
+                  <select name="gender" value={editData.gender || ''} onChange={handleEditChange} style={inputStyle}>
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
                   </select>
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label style={labelStyle}>Address</label>
-                  <input
-                    type="text"
-                    name="address"
-                    value={editData.address || ''}
-                    onChange={handleEditChange}
-                    style={inputStyle}
-                  />
+                  <input type="text" name="address" value={editData.address || ''} onChange={handleEditChange} style={inputStyle} />
                 </div>
                 <div>
                   <label style={labelStyle}>Contact Number</label>
-                  <input
-                    type="text"
-                    name="contact_number"
-                    value={editData.contact_number || ''}
-                    onChange={handleEditChange}
-                    style={inputStyle}
-                  />
+                  <input type="text" name="contact_number" value={editData.contact_number || ''} onChange={handleEditChange} style={inputStyle} />
                 </div>
                 <div>
                   <label style={labelStyle}>Email *</label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={editData.email || ''}
-                    onChange={handleEditChange}
-                    style={inputStyle}
-                  />
+                  <input type="email" name="email" value={editData.email || ''} onChange={handleEditChange} style={inputStyle} />
                 </div>
 
-                {/* Parent/Guardian Information */}
                 <div style={{ gridColumn: '1 / -1', marginTop: '8px' }}>
                   <h3 style={{ fontSize: '16px', color: '#1a56db', marginBottom: '12px', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px' }}>
                     👨‍👩‍👦 Parent/Guardian Information
@@ -1610,86 +1601,37 @@ const RegistrarDashboard = () => {
 
                 <div>
                   <label style={labelStyle}>Father's Name</label>
-                  <input
-                    type="text"
-                    name="father_name"
-                    value={editData.father_name || ''}
-                    onChange={handleEditChange}
-                    style={inputStyle}
-                  />
+                  <input type="text" name="father_name" value={editData.father_name || ''} onChange={handleEditChange} style={inputStyle} />
                 </div>
                 <div>
                   <label style={labelStyle}>Father's Occupation</label>
-                  <input
-                    type="text"
-                    name="father_occupation"
-                    value={editData.father_occupation || ''}
-                    onChange={handleEditChange}
-                    style={inputStyle}
-                  />
+                  <input type="text" name="father_occupation" value={editData.father_occupation || ''} onChange={handleEditChange} style={inputStyle} />
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label style={labelStyle}>Father's Contact</label>
-                  <input
-                    type="text"
-                    name="father_contact"
-                    value={editData.father_contact || ''}
-                    onChange={handleEditChange}
-                    style={inputStyle}
-                  />
+                  <input type="text" name="father_contact" value={editData.father_contact || ''} onChange={handleEditChange} style={inputStyle} />
                 </div>
                 <div>
                   <label style={labelStyle}>Mother's Name</label>
-                  <input
-                    type="text"
-                    name="mother_name"
-                    value={editData.mother_name || ''}
-                    onChange={handleEditChange}
-                    style={inputStyle}
-                  />
+                  <input type="text" name="mother_name" value={editData.mother_name || ''} onChange={handleEditChange} style={inputStyle} />
                 </div>
                 <div>
                   <label style={labelStyle}>Mother's Occupation</label>
-                  <input
-                    type="text"
-                    name="mother_occupation"
-                    value={editData.mother_occupation || ''}
-                    onChange={handleEditChange}
-                    style={inputStyle}
-                  />
+                  <input type="text" name="mother_occupation" value={editData.mother_occupation || ''} onChange={handleEditChange} style={inputStyle} />
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label style={labelStyle}>Mother's Contact</label>
-                  <input
-                    type="text"
-                    name="mother_contact"
-                    value={editData.mother_contact || ''}
-                    onChange={handleEditChange}
-                    style={inputStyle}
-                  />
+                  <input type="text" name="mother_contact" value={editData.mother_contact || ''} onChange={handleEditChange} style={inputStyle} />
                 </div>
                 <div>
                   <label style={labelStyle}>Guardian's Name</label>
-                  <input
-                    type="text"
-                    name="guardian_name"
-                    value={editData.guardian_name || ''}
-                    onChange={handleEditChange}
-                    style={inputStyle}
-                  />
+                  <input type="text" name="guardian_name" value={editData.guardian_name || ''} onChange={handleEditChange} style={inputStyle} />
                 </div>
                 <div>
                   <label style={labelStyle}>Guardian's Contact</label>
-                  <input
-                    type="text"
-                    name="guardian_contact"
-                    value={editData.guardian_contact || ''}
-                    onChange={handleEditChange}
-                    style={inputStyle}
-                  />
+                  <input type="text" name="guardian_contact" value={editData.guardian_contact || ''} onChange={handleEditChange} style={inputStyle} />
                 </div>
 
-                {/* Application Details */}
                 <div style={{ gridColumn: '1 / -1', marginTop: '8px' }}>
                   <h3 style={{ fontSize: '16px', color: '#1a56db', marginBottom: '12px', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px' }}>
                     📄 Application Details
@@ -1698,23 +1640,11 @@ const RegistrarDashboard = () => {
 
                 <div>
                   <label style={labelStyle}>Academic Year</label>
-                  <input
-                    type="text"
-                    name="academic_year"
-                    value={editData.academic_year || ''}
-                    onChange={handleEditChange}
-                    style={inputStyle}
-                  />
+                  <input type="text" name="academic_year" value={editData.academic_year || ''} onChange={handleEditChange} style={inputStyle} />
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label style={labelStyle}>Registrar Remarks</label>
-                  <textarea
-                    name="registrar_remarks"
-                    value={editData.registrar_remarks || ''}
-                    onChange={handleEditChange}
-                    style={{ ...inputStyle, minHeight: '80px' }}
-                    placeholder="Enter remarks..."
-                  />
+                  <textarea name="registrar_remarks" value={editData.registrar_remarks || ''} onChange={handleEditChange} style={{ ...inputStyle, minHeight: '80px' }} placeholder="Enter remarks..." />
                 </div>
               </div>
             ) : (
@@ -1723,7 +1653,6 @@ const RegistrarDashboard = () => {
               </div>
             )}
 
-            {/* Action Buttons */}
             {!editLoading && editData && (
               <div style={{ marginTop: '24px', borderTop: '2px solid #e5e7eb', paddingTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                 <button
@@ -1829,7 +1758,6 @@ const RegistrarDashboard = () => {
             )}
 
             <form onSubmit={handleAddSubmit}>
-              {/* Personal Information */}
               <div style={{ marginBottom: '24px' }}>
                 <h3 style={{ fontSize: '16px', color: '#1f2937', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px', marginBottom: '16px' }}>
                   👤 Personal Information
@@ -1884,7 +1812,6 @@ const RegistrarDashboard = () => {
                 </div>
               </div>
 
-              {/* Parent/Guardian */}
               <div style={{ marginBottom: '24px' }}>
                 <h3 style={{ fontSize: '16px', color: '#1f2937', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px', marginBottom: '16px' }}>
                   👨‍👩‍👦 Parent/Guardian
@@ -1925,7 +1852,6 @@ const RegistrarDashboard = () => {
                 </div>
               </div>
 
-              {/* Requirements */}
               <div style={{ marginBottom: '24px' }}>
                 <h3 style={{ fontSize: '16px', color: '#1f2937', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px', marginBottom: '16px' }}>
                   📋 Requirements

@@ -15,6 +15,11 @@ import Reports from './pages/admin/Reports';
 import AdminProfile from './pages/admin/Profile';
 import RegistrarProfile from './pages/registrar/Profile';
 import StudentProfile from './pages/student/Profile';
+import RegistrarSections from './pages/registrar/Sections';
+import RegistrarSubjects from './pages/registrar/Subjects';
+import RegistrarEnrollments from './pages/registrar/Enrollments';
+import RegistrarGrades from './pages/registrar/Grades';
+import RegistrarRemarks from './pages/registrar/Remarks';
 
 function App() {
   return (
@@ -28,6 +33,11 @@ function App() {
         {/* Registrar Routes */}
         <Route path="/registrar/dashboard" element={<RegistrarDashboard />} />
         <Route path="/registrar/profile" element={<RegistrarProfile />} />
+        <Route path="/registrar/sections" element={<RegistrarSections />} />
+        <Route path="/registrar/subjects" element={<RegistrarSubjects />} />
+        <Route path="/registrar/enrollments" element={<RegistrarEnrollments />} />
+        <Route path="/registrar/grades" element={<RegistrarGrades />} />
+        <Route path="/registrar/remarks" element={<RegistrarRemarks />} />
         
         {/* Admin Routes */}
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
