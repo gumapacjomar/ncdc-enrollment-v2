@@ -20,6 +20,9 @@ import RegistrarSubjects from './pages/registrar/Subjects';
 import RegistrarEnrollments from './pages/registrar/Enrollments';
 import RegistrarGrades from './pages/registrar/Grades';
 import RegistrarRemarks from './pages/registrar/Remarks';
+import StudentMonitoring from './pages/admin/StudentMonitoring';
+import GradeReports from './pages/admin/GradeReports';
+import StudentHistory from './pages/admin/StudentHistory';
 
 function App() {
   return (
@@ -47,6 +50,9 @@ function App() {
         <Route path="/admin/approved" element={<ConfirmEnrollments />} />
         <Route path="/admin/applications" element={<AllApplications />} />
         <Route path="/admin/reports" element={<Reports />} />
+        <Route path="/admin/student-monitoring" element={<StudentMonitoring />} />
+        <Route path="/admin/grade-reports" element={<GradeReports />} />
+        <Route path="/admin/student-history" element={<StudentHistory />} />
         <Route path="/admin/profile" element={<AdminProfile />} />
         
         {/* Student Routes */}

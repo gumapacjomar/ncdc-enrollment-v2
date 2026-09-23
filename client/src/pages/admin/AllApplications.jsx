@@ -36,7 +36,7 @@ const AllApplications = () => {
     }
   };
 
-  // ===== VIEW FUNCTION - FIXED =====
+  // ===== VIEW FUNCTION =====
   const handleView = async (applicationId, name) => {
     console.log('🔍 View clicked for application ID:', applicationId);
     
@@ -48,7 +48,6 @@ const AllApplications = () => {
     setModalLoading(true);
     setShowModal(true);
     try {
-      // Use the registrar/application endpoint
       const response = await API.get(`/registrar/application/${applicationId}`);
       console.log('📋 Application data loaded:', response.data);
       setSelectedStudent(response.data);
@@ -109,7 +108,8 @@ const AllApplications = () => {
 
   const filteredApplications = applications.filter(app => {
     const fullName = `${app.first_name} ${app.middle_name || ''} ${app.last_name}`.toLowerCase();
-    const studentId = app.student_id ? app.student_id.replace('NCDC-', '') : '';
+    // ✅ FIX: Use student_public_id instead of student_id
+    const studentId = app.student_public_id ? app.student_public_id.replace('NCDC-', '') : '';
     const matchesSearch = fullName.includes(searchTerm.toLowerCase()) || 
                           app.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           studentId.includes(searchTerm.toLowerCase());
@@ -231,7 +231,8 @@ const AllApplications = () => {
               padding: '10px 16px',
               border: '1px solid #d1d5db',
               borderRadius: '8px',
-              fontSize: '14px'
+              fontSize: '14px',
+              boxSizing: 'border-box'
             }}
           />
         </div>
@@ -273,7 +274,8 @@ const AllApplications = () => {
                     <tr key={index} style={{ borderBottom: '1px solid #e5e7eb' }}>
                       <td style={{ padding: '12px', fontSize: '14px', color: '#6b7280' }}>{index + 1}</td>
                       <td style={{ padding: '12px', fontSize: '14px', fontWeight: '600', color: '#1a56db' }}>
-                        {app.student_id ? app.student_id.replace('NCDC-', '') : '—'}
+                        {/* ✅ FIX: Use student_public_id */}
+                        {app.student_public_id ? app.student_public_id.replace('NCDC-', '') : '—'}
                       </td>
                       <td style={{ padding: '12px', fontSize: '14px', color: '#1f2937', fontWeight: '500' }}>
                         {app.first_name} {app.middle_name || ''} {app.last_name} {app.suffix || ''}
@@ -293,7 +295,6 @@ const AllApplications = () => {
                       </td>
                       <td style={{ padding: '12px', textAlign: 'center' }}>
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
-                          {/* ===== VIEW BUTTON - FIXED: Use application_id ===== */}
                           <button
                             onClick={() => handleView(app.application_id, `${app.first_name} ${app.last_name}`)}
                             style={{
@@ -336,9 +337,7 @@ const AllApplications = () => {
         </div>
       </div>
 
-      {/* ============================================================ */}
-      {/* ===== VIEW MODAL - UPDATED ===== */}
-      {/* ============================================================ */}
+      {/* ===== VIEW MODAL ===== */}
       {showModal && (
         <div style={{
           position: 'fixed',
@@ -366,7 +365,6 @@ const AllApplications = () => {
             boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
           }} onClick={(e) => e.stopPropagation()}>
             
-            {/* Close Button */}
             <button
               onClick={() => setShowModal(false)}
               style={{
@@ -389,7 +387,6 @@ const AllApplications = () => {
               </div>
             ) : selectedStudent ? (
               <>
-                {/* Header */}
                 <div style={{ marginBottom: '24px', borderBottom: '2px solid #e5e7eb', paddingBottom: '16px' }}>
                   <h2 style={{ fontSize: '24px', color: '#1f2937', margin: 0 }}>
                     👤 Student Information
@@ -399,9 +396,8 @@ const AllApplications = () => {
                   </p>
                 </div>
 
-                {/* Two Column Layout */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-                  {/* LEFT COLUMN - Personal Info */}
+                  {/* LEFT COLUMN */}
                   <div>
                     <h3 style={{ fontSize: '16px', color: '#1a56db', marginBottom: '12px' }}>📋 Personal Information</h3>
                     <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px' }}>
@@ -413,7 +409,6 @@ const AllApplications = () => {
                       <p><strong>Email:</strong> {selectedStudent.email || 'N/A'}</p>
                     </div>
 
-                    {/* Parent/Guardian */}
                     <h3 style={{ fontSize: '16px', color: '#1a56db', marginTop: '16px', marginBottom: '12px' }}>👨‍👩‍👦 Parent/Guardian</h3>
                     <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px' }}>
                       <p><strong>Father:</strong> {selectedStudent.father_name || 'N/A'}</p>
@@ -429,7 +424,7 @@ const AllApplications = () => {
                     </div>
                   </div>
 
-                  {/* RIGHT COLUMN - Application & Documents */}
+                  {/* RIGHT COLUMN */}
                   <div>
                     <h3 style={{ fontSize: '16px', color: '#1a56db', marginBottom: '12px' }}>📄 Application Details</h3>
                     <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px' }}>
@@ -449,7 +444,6 @@ const AllApplications = () => {
                       <p><strong>Admin Remarks:</strong> {selectedStudent.admin_remarks || 'N/A'}</p>
                     </div>
 
-                    {/* Requirements */}
                     <h3 style={{ fontSize: '16px', color: '#1a56db', marginTop: '16px', marginBottom: '12px' }}>📎 Requirements</h3>
                     <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px' }}>
                       {selectedStudent.birth_certificate ? (
@@ -471,7 +465,6 @@ const AllApplications = () => {
                   </div>
                 </div>
 
-                {/* Footer Buttons */}
                 <div style={{ marginTop: '24px', borderTop: '2px solid #e5e7eb', paddingTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                   <button
                     onClick={() => setShowModal(false)}

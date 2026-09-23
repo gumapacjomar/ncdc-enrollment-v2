@@ -107,7 +107,7 @@ const AdminDashboard = () => {
     }
   };
 
-  // ===== CONFIRM FUNCTION - UPDATED =====
+  // ===== CONFIRM FUNCTION =====
   const handleConfirm = async () => {
     if (!window.confirm('Are you sure you want to confirm this enrollment?')) return;
     
@@ -115,7 +115,10 @@ const AdminDashboard = () => {
     setModalMessage('');
     
     try {
-      const response = await API.post(`/admin/confirm/${selectedApp.id}`, {
+      const applicationId = selectedApp.application_id || selectedApp.id;
+      console.log('🔍 Confirming application ID:', applicationId);
+      
+      const response = await API.post(`/admin/confirm/${applicationId}`, {
         adminId: user.id,
         remarks: remarks || 'Confirmed by Admin'
       });
@@ -143,6 +146,7 @@ const AdminDashboard = () => {
       }, 2000);
       
     } catch (error) {
+      console.error('❌ Confirm error:', error);
       setModalMessage({ type: 'error', text: error.response?.data?.error || 'Failed to confirm enrollment' });
     } finally {
       setActionLoading(false);
@@ -158,7 +162,10 @@ const AdminDashboard = () => {
     setModalMessage('');
     
     try {
-      await API.put(`/admin/reject/${selectedApp.id}`, {
+      const applicationId = selectedApp.application_id || selectedApp.id;
+      console.log('🔍 Rejecting application ID:', applicationId);
+      
+      await API.put(`/admin/reject/${applicationId}`, {
         adminId: user.id,
         remarks: reason || 'Rejected by Admin'
       });
@@ -172,6 +179,7 @@ const AdminDashboard = () => {
       }, 2000);
       
     } catch (error) {
+      console.error('❌ Reject error:', error);
       setModalMessage({ type: 'error', text: 'Failed to reject application' });
     } finally {
       setActionLoading(false);
@@ -205,13 +213,17 @@ const AdminDashboard = () => {
     };
   };
 
+  // ✅ UPDATED MENU ITEMS — Added Student Monitoring, Grade Reports, Student History
   const menuItems = [
     { id: 'dashboard', icon: '📊', label: 'Dashboard', path: '/admin/dashboard', color: '#3b82f6' },
     { id: 'applications', icon: '📋', label: 'Applications', path: '/admin/applications', color: '#8b5cf6' },
     { id: 'approved', icon: '✅', label: 'Confirm Enrollments', path: '/admin/approved', color: '#10b981' },
     { id: 'reports', icon: '📈', label: 'Reports', path: '/admin/reports', color: '#f59e0b' },
+    { id: 'monitoring', icon: '👁️', label: 'Student Monitoring', path: '/admin/student-monitoring', color: '#06b6d4' },
+    { id: 'grade-reports', icon: '📉', label: 'Grade Reports', path: '/admin/grade-reports', color: '#ef4444' },
+    { id: 'student-history', icon: '📚', label: 'Student History', path: '/admin/student-history', color: '#a855f7' },
     { id: 'registrars', icon: '👨‍💼', label: 'Registrar Management', path: '/admin/registrars', color: '#ec4899' },
-    { id: 'password-requests', icon: '🔑', label: 'Password Requests', path: '/admin/password-requests', color: '#ef4444' }
+    { id: 'password-requests', icon: '🔑', label: 'Password Requests', path: '/admin/password-requests', color: '#f43f5e' }
   ];
 
   const isActive = (path) => currentPath === path;
@@ -232,7 +244,7 @@ const AdminDashboard = () => {
       display: 'flex',
       overflow: 'hidden'
     }}>
-      {/* ========== FIXED SIDEBAR ========== */}
+      {/* ========== SIDEBAR ========== */}
       <div style={{
         width: '280px',
         minHeight: '100vh',
@@ -357,6 +369,7 @@ const AdminDashboard = () => {
                 marginBottom: '4px',
                 cursor: 'pointer',
                 position: 'relative',
+                boxSizing: 'border-box',
                 animation: `fadeInDown ${0.6 + index * 0.1}s ease`
               }}
               onMouseEnter={(e) => {
@@ -533,11 +546,10 @@ const AdminDashboard = () => {
                 top: 0,
                 left: 0,
                 right: 0,
-                height: '3px',
+                height: hoveredCard === index ? '6px' : '3px',
                 background: stat.gradient,
                 borderRadius: '16px 16px 0 0',
-                transition: 'height 0.3s ease',
-                height: hoveredCard === index ? '6px' : '3px'
+                transition: 'height 0.3s ease'
               }} />
               
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -792,7 +804,7 @@ const AdminDashboard = () => {
         </div>
       </div>
 
-      {/* ========== VIEW MODAL (with Confirm & Reject) ========== */}
+      {/* ========== VIEW MODAL ========== */}
       {showModal && selectedApp && (
         <div style={{
           position: 'fixed',
@@ -950,7 +962,7 @@ const AdminDashboard = () => {
                   />
                 </div>
 
-                {/* Action Buttons - Confirm & Reject Only */}
+                {/* Action Buttons */}
                 <div style={{ display: 'flex', gap: '12px', marginTop: '20px', flexWrap: 'wrap' }}>
                   <button
                     onClick={handleConfirm}
