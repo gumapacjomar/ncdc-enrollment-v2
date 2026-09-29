@@ -11,9 +11,11 @@ const StudentDashboard = () => {
   const [enrollments, setEnrollments] = useState([]);
   const [grades, setGrades] = useState([]);
   const [remarks, setRemarks] = useState([]);
+  const [reenrollRequests, setReenrollRequests] = useState([]);
   const [profilePicPreview, setProfilePicPreview] = useState(null);
   const [activeMenu, setActiveMenu] = useState('dashboard');
 
+  // ===== EDIT PROFILE STATES =====
   const [editMode, setEditMode] = useState(false);
   const [editData, setEditData] = useState({
     first_name: '',
@@ -25,6 +27,7 @@ const StudentDashboard = () => {
   const [editLoading, setEditLoading] = useState(false);
   const [editMessage, setEditMessage] = useState('');
 
+  // ===== CHANGE PASSWORD STATES =====
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
@@ -34,8 +37,18 @@ const StudentDashboard = () => {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState('');
 
+  // ===== PROFILE PICTURE UPLOAD STATES =====
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
+
+  // ===== REPORT CARD STATE =====
+  const [reportCardSY, setReportCardSY] = useState('');
+
+  // ===== RE-ENROLLMENT STATE =====
+  const [showReenrollModal, setShowReenrollModal] = useState(false);
+  const [reenrollRemarks, setReenrollRemarks] = useState('');
+  const [reenrollSubmitting, setReenrollSubmitting] = useState(false);
+  const [reenrollMessage, setReenrollMessage] = useState({ type: '', text: '' });
 
   const user = JSON.parse(localStorage.getItem('user'));
 
@@ -62,22 +75,41 @@ const StudentDashboard = () => {
       try {
         const appResponse = await API.get(`/student/application/${studentId}`);
         setApplication(appResponse.data);
-      } catch (e) { console.warn('No application'); }
+      } catch (e) {
+        console.warn('No application found');
+      }
 
       try {
         const enrollRes = await API.get(`/registrar/enrollments/student/${studentId}`);
-        setEnrollments(Array.isArray(enrollRes.data) ? enrollRes.data : []);
-      } catch (e) { console.warn('No enrollments'); }
+        const enr = Array.isArray(enrollRes.data) ? enrollRes.data : [];
+        setEnrollments(enr);
+        if (enr.length > 0) {
+          setReportCardSY(enr[0].school_year);
+        }
+      } catch (e) {
+        console.warn('No enrollments found');
+      }
 
       try {
         const gradesRes = await API.get(`/registrar/grades/student/${studentId}`);
         setGrades(Array.isArray(gradesRes.data) ? gradesRes.data : []);
-      } catch (e) { console.warn('No grades'); }
+      } catch (e) {
+        console.warn('No grades found');
+      }
 
       try {
         const remarksRes = await API.get(`/registrar/remarks/student/${studentId}`);
         setRemarks(Array.isArray(remarksRes.data) ? remarksRes.data : []);
-      } catch (e) { console.warn('No remarks'); }
+      } catch (e) {
+        console.warn('No remarks found');
+      }
+
+      try {
+        const reenrollRes = await API.get(`/student/reenrollment/${studentId}`);
+        setReenrollRequests(Array.isArray(reenrollRes.data) ? reenrollRes.data : []);
+      } catch (e) {
+        console.warn('No re-enrollment requests');
+      }
 
     } catch (error) {
       console.error('Error fetching student data:', error);
@@ -86,6 +118,7 @@ const StudentDashboard = () => {
     }
   };
 
+  // ===== EDIT PROFILE =====
   const handleEditClick = () => {
     if (student) {
       setEditData({
@@ -126,6 +159,7 @@ const StudentDashboard = () => {
     setEditMessage('');
   };
 
+  // ===== PROFILE PICTURE =====
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -161,6 +195,7 @@ const StudentDashboard = () => {
     }
   };
 
+  // ===== CHANGE PASSWORD =====
   const handlePasswordChange = (e) => {
     const { name, value } = e.target;
     setPasswordData(prev => ({ ...prev, [name]: value }));
@@ -202,11 +237,44 @@ const StudentDashboard = () => {
     }
   };
 
+  // ===== RE-ENROLLMENT SUBMIT =====
+  const handleSubmitReenroll = async () => {
+    if (!currentEnrollment) return;
+
+    setReenrollSubmitting(true);
+    setReenrollMessage({ type: '', text: '' });
+
+    try {
+      const res = await API.post('/student/reenrollment/apply', {
+        student_id: user.id,
+        current_enrollment_id: currentEnrollment.id,
+        remarks: reenrollRemarks || 'Student-initiated re-enrollment'
+      });
+
+      setReenrollMessage({ type: 'success', text: res.data.message });
+
+      setTimeout(() => {
+        setShowReenrollModal(false);
+        setReenrollRemarks('');
+        setReenrollMessage({ type: '', text: '' });
+        fetchStudentData();
+      }, 2000);
+    } catch (err) {
+      setReenrollMessage({
+        type: 'error',
+        text: err.response?.data?.error || 'Failed to submit re-enrollment'
+      });
+    } finally {
+      setReenrollSubmitting(false);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.clear();
     navigate('/login');
   };
 
+  // ===== HELPERS =====
   const getStatusInfo = (status) => {
     const statusMap = {
       pending: { label: 'Pending', color: '#f59e0b', bg: '#fef3c7', icon: '⏳' },
@@ -218,86 +286,123 @@ const StudentDashboard = () => {
     return statusMap[status] || statusMap.pending;
   };
 
-  const studentNumber = student?.student_id ? student.student_id.replace('NCDC-', '') : 'N/A';
   const statusInfo = application ? getStatusInfo(application.status) : getStatusInfo('pending');
 
-  // ===== AUTO-REMARKS =====
-  const getAutoRemarks = (gradeValue) => {
-    const num = parseFloat(gradeValue);
-    if (isNaN(num)) return '';
-    if (num >= 95) return 'Excellent';
+  // ===== CURRENT ENROLLMENT =====
+  const getCurrentEnrollment = () => {
+    return enrollments.find(e => e.status === 'enrolled') || enrollments[0] || null;
+  };
+
+  const currentEnrollment = getCurrentEnrollment();
+
+  // ===== LATEST GRADES =====
+  const getLatestGrades = () => {
+    if (enrollments.length === 0 || grades.length === 0) return [];
+    const latestEnrollment = enrollments[0];
+    return grades.filter(g => 
+      g.school_year === latestEnrollment.school_year && 
+      g.grade_level === latestEnrollment.grade_level
+    );
+  };
+
+  const latestGrades = getLatestGrades();
+
+  // ===== AVERAGE =====
+  const calculateAverage = (gradeList = grades) => {
+    if (gradeList.length === 0) return 0;
+    const sum = gradeList.reduce((acc, g) => acc + parseFloat(g.grade || 0), 0);
+    return (sum / gradeList.length).toFixed(2);
+  };
+
+  // ===== SUBJECT AVERAGES =====
+  const buildSubjectAverages = (gradeList) => {
+    const subjectMap = {};
+    gradeList.forEach(g => {
+      if (!subjectMap[g.subject]) {
+        subjectMap[g.subject] = { q1: null, q2: null, q3: null, q4: null, remarks: '' };
+      }
+      const q = g.quarter?.toLowerCase() || '';
+      if (q.includes('1st')) subjectMap[g.subject].q1 = parseFloat(g.grade);
+      else if (q.includes('2nd')) subjectMap[g.subject].q2 = parseFloat(g.grade);
+      else if (q.includes('3rd')) subjectMap[g.subject].q3 = parseFloat(g.grade);
+      else if (q.includes('4th')) subjectMap[g.subject].q4 = parseFloat(g.grade);
+      if (g.remarks) subjectMap[g.subject].remarks = g.remarks;
+    });
+
+    return Object.entries(subjectMap).map(([subject, data]) => {
+      const quarters = [data.q1, data.q2, data.q3, data.q4].filter(v => v !== null);
+      const finalAve = quarters.length > 0 
+        ? (quarters.reduce((a, b) => a + b, 0) / quarters.length).toFixed(2)
+        : null;
+      return { subject, ...data, finalAve };
+    });
+  };
+
+  // ===== GRADES BY SY =====
+  const buildGradesBySY = () => {
+    const grouped = {};
+    grades.forEach(g => {
+      const key = `${g.school_year}|${g.grade_level}`;
+      if (!grouped[key]) {
+        grouped[key] = {
+          school_year: g.school_year,
+          grade_level: g.grade_level,
+          subjects: []
+        };
+      }
+      grouped[key].subjects.push(g);
+    });
+
+    return Object.values(grouped).map(group => ({
+      ...group,
+      subjectAverages: buildSubjectAverages(group.subjects),
+      overallAverage: calculateAverage(group.subjects)
+    })).sort((a, b) => {
+      if (a.school_year > b.school_year) return -1;
+      if (a.school_year < b.school_year) return 1;
+      return 0;
+    });
+  };
+
+  const gradesBySY = buildGradesBySY();
+
+  // ===== REPORT CARD =====
+  const getReportCard = (sy) => {
+    const reportGrades = grades.filter(g => g.school_year === sy);
+    const enrollment = enrollments.find(e => e.school_year === sy);
+    return {
+      school_year: sy,
+      grade_level: enrollment?.grade_level || '',
+      section: enrollment?.section_name || '',
+      status: enrollment?.status || '',
+      subjects: buildSubjectAverages(reportGrades),
+      overallAverage: calculateAverage(reportGrades)
+    };
+  };
+
+  const getGradeColor = (grade) => {
+    if (!grade) return { bg: '#f3f4f6', color: '#6b7280' };
+    const num = parseFloat(grade);
+    if (num >= 90) return { bg: '#d1fae5', color: '#065f46' };
+    if (num >= 85) return { bg: '#dbeafe', color: '#1a56db' };
+    if (num >= 75) return { bg: '#fef3c7', color: '#92400e' };
+    return { bg: '#fee2e2', color: '#991b1b' };
+  };
+
+  const getRemarks = (average) => {
+    const num = parseFloat(average);
     if (num >= 90) return 'Outstanding';
     if (num >= 85) return 'Very Good';
     if (num >= 80) return 'Good';
     if (num >= 75) return 'Satisfactory';
-    return 'Failed';
-  };
-
-  // ===== GROUP GRADES BY SUBJECT + QUARTER =====
-  const groupGradesBySubject = (gradesList) => {
-    const grouped = {};
-
-    gradesList.forEach(g => {
-      const key = g.subject;
-      if (!grouped[key]) {
-        grouped[key] = {
-          subject: g.subject,
-          quarters: { '1st Quarter': null, '2nd Quarter': null, '3rd Quarter': null, '4th Quarter': null }
-        };
-      }
-
-      let q = g.quarter || '';
-      if (q === 'Q1' || q === '1st Quarter') q = '1st Quarter';
-      else if (q === 'Q2' || q === '2nd Quarter') q = '2nd Quarter';
-      else if (q === 'Q3' || q === '3rd Quarter') q = '3rd Quarter';
-      else if (q === 'Q4' || q === '4th Quarter') q = '4th Quarter';
-
-      if (grouped[key].quarters[q] !== undefined) {
-        grouped[key].quarters[q] = parseFloat(g.grade);
-      }
-    });
-
-    return Object.values(grouped);
-  };
-
-  const computeFinalAverage = (quarters) => {
-    const vals = Object.values(quarters).filter(v => v !== null && !isNaN(v));
-    if (vals.length === 0) return null;
-    const sum = vals.reduce((acc, v) => acc + v, 0);
-    return (sum / vals.length).toFixed(2);
-  };
-
-  const gradeColor = (grade) => {
-    const num = parseFloat(grade);
-    if (num >= 95) return { bg: '#d1fae5', color: '#065f46' };
-    if (num >= 90) return { bg: '#dbeafe', color: '#1a56db' };
-    if (num >= 85) return { bg: '#e0e7ff', color: '#4338ca' };
-    if (num >= 80) return { bg: '#fef3c7', color: '#92400e' };
-    if (num >= 75) return { bg: '#fff7ed', color: '#c2410c' };
-    return { bg: '#fee2e2', color: '#991b1b' };
-  };
-
-  const remarksColor = (remarks) => {
-    const colors = {
-      'Excellent': { bg: '#d1fae5', color: '#065f46' },
-      'Outstanding': { bg: '#dbeafe', color: '#1a56db' },
-      'Very Good': { bg: '#e0e7ff', color: '#4338ca' },
-      'Good': { bg: '#fef3c7', color: '#92400e' },
-      'Satisfactory': { bg: '#fff7ed', color: '#c2410c' },
-      'Failed': { bg: '#fee2e2', color: '#991b1b' }
-    };
-    return colors[remarks] || { bg: '#f3f4f6', color: '#6b7280' };
-  };
-
-  const calculateOverallAverage = () => {
-    if (grades.length === 0) return 0;
-    const sum = grades.reduce((acc, g) => acc + parseFloat(g.grade || 0), 0);
-    return (sum / grades.length).toFixed(2);
+    return 'Needs Improvement';
   };
 
   const menuItems = [
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
     { id: 'grades', icon: '📈', label: 'My Grades' },
+    { id: 'reportcard', icon: '📄', label: 'Report Card' },
+    { id: 'reenrollment', icon: '🔄', label: 'Re-enrollment' },
     { id: 'remarks', icon: '💬', label: 'My Remarks' },
     { id: 'history', icon: '📚', label: 'Enrollment History' },
     { id: 'profile', icon: '👤', label: 'My Profile' }
@@ -307,6 +412,8 @@ const StudentDashboard = () => {
     switch (activeMenu) {
       case 'dashboard': return renderDashboard();
       case 'grades': return renderGrades();
+      case 'reportcard': return renderReportCard();
+      case 'reenrollment': return renderReEnrollment();
       case 'remarks': return renderRemarks();
       case 'history': return renderHistory();
       case 'profile': return renderProfile();
@@ -317,114 +424,254 @@ const StudentDashboard = () => {
   // ============ DASHBOARD ============
   const renderDashboard = () => (
     <div>
+      {/* Welcome Card */}
+      <div style={{
+        background: 'linear-gradient(135deg, #1a56db, #3b82f6)',
+        borderRadius: '16px',
+        padding: '28px',
+        color: 'white',
+        marginBottom: '24px',
+        boxShadow: '0 8px 25px rgba(26,86,219,0.3)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+          <div style={{
+            width: '72px', height: '72px', borderRadius: '50%',
+            background: 'rgba(255,255,255,0.2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '28px', fontWeight: '700',
+            overflow: 'hidden'
+          }}>
+            {profilePicPreview ? (
+              <img src={profilePicPreview} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              student?.first_name?.charAt(0).toUpperCase() || 'S'
+            )}
+          </div>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '700' }}>
+              Welcome, {student?.first_name} {student?.last_name}!
+            </h2>
+            <p style={{ margin: '6px 0 0', fontSize: '14px', opacity: 0.95 }}>
+              🆔 {student?.student_id || 'N/A'} &nbsp;|&nbsp;
+              🎓 {student?.current_grade_level || 'Not Assigned'}
+              {student?.current_section && ` (${student.current_section})`}
+            </p>
+          </div>
+          <div style={{
+            background: 'rgba(255,255,255,0.2)',
+            padding: '8px 16px',
+            borderRadius: '20px',
+            fontSize: '13px',
+            fontWeight: '600'
+          }}>
+            {statusInfo.icon} {statusInfo.label}
+          </div>
+        </div>
+      </div>
+
+      {/* Info Cards */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
         gap: '16px',
         marginBottom: '24px'
       }}>
         <div style={{
           background: 'white', padding: '20px', borderRadius: '12px',
-          border: '1px solid #e5e7eb', borderTop: '4px solid #1a56db'
+          border: '1px solid #e5e7eb', borderTop: '4px solid #1a56db',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
         }}>
-          <div style={{ fontSize: '12px', color: '#6b7280' }}>Student ID</div>
+          <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>Current School Year</div>
           <div style={{ fontSize: '22px', fontWeight: '700', color: '#1f2937', marginTop: '4px' }}>
-            {studentNumber}
-          </div>
-          <div style={{ fontSize: '11px', color: '#9ca3af' }}>Your unique NCDC number</div>
-        </div>
-
-        <div style={{
-          background: 'white', padding: '20px', borderRadius: '12px',
-          border: '1px solid #e5e7eb', borderTop: '4px solid #8b5cf6'
-        }}>
-          <div style={{ fontSize: '12px', color: '#6b7280' }}>Grade Level</div>
-          <div style={{ fontSize: '22px', fontWeight: '700', color: '#1f2937', marginTop: '4px' }}>
-            {student?.current_grade_level || 'Not Assigned'}
-          </div>
-          <div style={{ fontSize: '11px', color: '#9ca3af' }}>
-            {student?.current_section ? `Section: ${student.current_section}` : 'Awaiting section'}
+            {currentEnrollment?.school_year || '—'}
           </div>
         </div>
 
         <div style={{
           background: 'white', padding: '20px', borderRadius: '12px',
-          border: '1px solid #e5e7eb', borderTop: `4px solid ${statusInfo.color}`
+          border: '1px solid #e5e7eb', borderTop: '4px solid #8b5cf6',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
         }}>
-          <div style={{ fontSize: '12px', color: '#6b7280' }}>Enrollment Status</div>
-          <div style={{ fontSize: '22px', fontWeight: '700', color: statusInfo.color, marginTop: '4px' }}>
-            {statusInfo.icon} {statusInfo.label}
-          </div>
-          <div style={{ fontSize: '11px', color: '#9ca3af' }}>
-            {statusInfo.label === 'Enrolled' ? 'Active Student' : 'Pending Review'}
+          <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>Section</div>
+          <div style={{ fontSize: '22px', fontWeight: '700', color: '#1f2937', marginTop: '4px' }}>
+            {currentEnrollment?.section_name || 'Not Assigned'}
           </div>
         </div>
 
-        {grades.length > 0 && (
+        <div style={{
+          background: 'white', padding: '20px', borderRadius: '12px',
+          border: '1px solid #e5e7eb',
+          borderTop: `4px solid ${parseFloat(calculateAverage(latestGrades)) >= 75 ? '#10b981' : '#ef4444'}`,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+        }}>
+          <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>General Average</div>
           <div style={{
-            background: 'white', padding: '20px', borderRadius: '12px',
-            border: '1px solid #e5e7eb',
-            borderTop: `4px solid ${parseFloat(calculateOverallAverage()) >= 75 ? '#10b981' : '#ef4444'}`
+            fontSize: '26px', fontWeight: '800', marginTop: '4px',
+            color: parseFloat(calculateAverage(latestGrades)) >= 75 ? '#065f46' : '#991b1b'
           }}>
-            <div style={{ fontSize: '12px', color: '#6b7280' }}>General Average</div>
-            <div style={{
-              fontSize: '28px', fontWeight: '800', marginTop: '4px',
-              color: parseFloat(calculateOverallAverage()) >= 75 ? '#065f46' : '#991b1b'
-            }}>
-              {calculateOverallAverage()}
-            </div>
-            <div style={{ fontSize: '11px', color: '#9ca3af' }}>
-              {parseFloat(calculateOverallAverage()) >= 75 ? '✅ Passing' : '⚠️ Needs Improvement'}
-            </div>
+            {latestGrades.length > 0 ? calculateAverage(latestGrades) : '—'}
           </div>
-        )}
-      </div>
+          <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
+            {latestGrades.length > 0 
+              ? (parseFloat(calculateAverage(latestGrades)) >= 75 ? '✅ Passing' : '⚠️ Needs Improvement')
+              : 'No grades yet'
+            }
+          </div>
+        </div>
 
-      <div style={{
-        background: 'white', borderRadius: '12px',
-        border: '1px solid #e5e7eb', padding: '24px', marginBottom: '24px'
-      }}>
-        <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#1f2937', marginBottom: '16px' }}>
-          📋 My Enrollment Details
-        </h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
-          <div>
-            <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>Status</p>
-            <p style={{ fontSize: '16px', fontWeight: '600', color: statusInfo.color, margin: '4px 0' }}>
-              {statusInfo.label}
-            </p>
+        <div style={{
+          background: 'white', padding: '20px', borderRadius: '12px',
+          border: '1px solid #e5e7eb', borderTop: '4px solid #06b6d4',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+        }}>
+          <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>Subjects</div>
+          <div style={{ fontSize: '22px', fontWeight: '700', color: '#1f2937', marginTop: '4px' }}>
+            {latestGrades.length}
           </div>
-          <div>
-            <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>Date Applied</p>
-            <p style={{ fontSize: '16px', fontWeight: '600', color: '#1f2937', margin: '4px 0' }}>
-              {application?.created_at ? new Date(application.created_at).toLocaleDateString() : 'N/A'}
-            </p>
-          </div>
-          <div>
-            <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>Academic Year</p>
-            <p style={{ fontSize: '16px', fontWeight: '600', color: '#1f2937', margin: '4px 0' }}>
-              {application?.academic_year || '2026-2027'}
-            </p>
-          </div>
-          <div>
-            <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>Grade Level</p>
-            <p style={{ fontSize: '16px', fontWeight: '600', color: '#1f2937', margin: '4px 0' }}>
-              {student?.current_grade_level || 'Not Assigned'}
-            </p>
+          <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
+            Total graded entries
           </div>
         </div>
       </div>
 
+      {/* Re-enrollment Alert (if eligible) */}
+      {(() => {
+        const canApply = currentEnrollment && 
+                        currentEnrollment.status === 'passed' && 
+                        currentEnrollment.grade_level !== 'Grade 6' &&
+                        !reenrollRequests.find(r => r.status === 'pending');
+        if (!canApply) return null;
+        return (
+          <div style={{
+            background: 'linear-gradient(135deg, #10b981, #34d399)',
+            padding: '20px 24px', borderRadius: '14px', color: 'white',
+            marginBottom: '24px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '12px',
+            boxShadow: '0 8px 25px rgba(16,185,129,0.3)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ fontSize: '36px' }}>🎓</div>
+              <div>
+                <div style={{ fontSize: '16px', fontWeight: '700', marginBottom: '4px' }}>
+                  Ready for Next Grade!
+                </div>
+                <div style={{ fontSize: '13px', opacity: 0.95 }}>
+                  Mana ka na sa {currentEnrollment.grade_level}. Apply na para sa sunod!
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveMenu('reenrollment')}
+              style={{
+                background: 'white',
+                color: '#065f46',
+                border: 'none',
+                padding: '10px 24px',
+                borderRadius: '10px',
+                fontSize: '14px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                boxShadow: '0 4px 15px rgba(0,0,0,0.15)'
+              }}
+            >
+              Apply Now →
+            </button>
+          </div>
+        );
+      })()}
+
+      {/* Latest Grades Preview */}
+      {latestGrades.length > 0 && (
+        <div style={{
+          background: 'white', borderRadius: '14px',
+          border: '1px solid #e5e7eb', overflow: 'hidden',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.04)', marginBottom: '24px'
+        }}>
+          <div style={{
+            padding: '16px 24px',
+            background: 'linear-gradient(135deg, #1a56db, #3b82f6)',
+            color: 'white',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>
+                📈 Latest Grades
+              </h3>
+              <p style={{ margin: '4px 0 0', fontSize: '13px', opacity: 0.9 }}>
+                {currentEnrollment?.grade_level} — SY {currentEnrollment?.school_year}
+              </p>
+            </div>
+            <button
+              onClick={() => setActiveMenu('grades')}
+              style={{
+                background: 'rgba(255,255,255,0.2)',
+                color: 'white',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+            >
+              View All →
+            </button>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: '#f9fafb', borderBottom: '2px solid #e5e7eb' }}>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Subject</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Quarter</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Grade</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Remarks</th>
+                </tr>
+              </thead>
+              <tbody>
+                {latestGrades.slice(0, 5).map((g, idx) => {
+                  const gc = getGradeColor(g.grade);
+                  return (
+                    <tr key={g.id || idx} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                      <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: '600', color: '#1f2937' }}>{g.subject}</td>
+                      <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', color: '#6b7280' }}>{g.quarter}</td>
+                      <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                        <span style={{
+                          padding: '4px 14px', borderRadius: '12px',
+                          fontSize: '14px', fontWeight: '700',
+                          background: gc.bg, color: gc.color
+                        }}>{g.grade}</span>
+                      </td>
+                      <td style={{ padding: '12px 16px', fontSize: '13px', color: '#6b7280' }}>{g.remarks || '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Links */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
         gap: '16px'
       }}>
         {[
-          { icon: '📈', label: 'My Grades', desc: 'View your grades', action: 'grades' },
-          { icon: '💬', label: 'My Remarks', desc: 'View remarks from teacher', action: 'remarks' },
-          { icon: '📚', label: 'My History', desc: 'View enrollment history', action: 'history' },
-          { icon: '🔒', label: 'Change Password', desc: 'Update your password', action: 'password' }
+          { icon: '📈', label: 'My Grades', desc: 'View all grades', action: 'grades' },
+          { icon: '📄', label: 'Report Card', desc: 'Print report card', action: 'reportcard' },
+          { icon: '🔄', label: 'Re-enrollment', desc: 'Apply for next grade', action: 'reenrollment' },
+          { icon: '💬', label: 'My Remarks', desc: 'View remarks', action: 'remarks' },
+          { icon: '📚', label: 'My History', desc: 'Enrollment history', action: 'history' },
+          { icon: '🔒', label: 'Change Password', desc: 'Update password', action: 'password' }
         ].map((item, index) => (
           <div
             key={index}
@@ -459,166 +706,355 @@ const StudentDashboard = () => {
     </div>
   );
 
-  // ============ GRADES (SIMPLE REPORT CARD) ============
-  const renderGrades = () => {
-    if (grades.length === 0) {
-      return (
-        <div style={{
-          background: 'white', borderRadius: '12px',
-          border: '1px solid #e5e7eb', padding: '24px'
-        }}>
-          <div style={{ textAlign: 'center', padding: '60px', color: '#6b7280' }}>
-            <div style={{ fontSize: '48px', marginBottom: '8px' }}>📭</div>
-            <h3 style={{ color: '#1f2937', marginBottom: '8px' }}>No Grades Yet</h3>
-            <p style={{ fontSize: '14px' }}>Wala pay grades nga gi-record sa imong teacher. Please wait.</p>
-          </div>
-        </div>
-      );
+  // ============ RE-ENROLLMENT ============
+  const renderReEnrollment = () => {
+    const pendingRequest = reenrollRequests.find(r => r.status === 'pending');
+    const approvedRequest = reenrollRequests.find(r => r.status === 'approved');
+    const rejectedRequests = reenrollRequests.filter(r => r.status === 'rejected');
+
+    // Eligibility
+    const canApply = currentEnrollment && 
+                     (currentEnrollment.status === 'passed' || currentEnrollment.status === 'enrolled') && 
+                     currentEnrollment.grade_level !== 'Grade 6' &&
+                     !pendingRequest;
+
+    const isGrade6 = currentEnrollment?.grade_level === 'Grade 6';
+
+    // Get next grade info
+    const gradeLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
+    const currentIdx = currentEnrollment ? gradeLevels.indexOf(currentEnrollment.grade_level) : -1;
+    const nextGrade = currentIdx >= 0 && currentIdx < 5 ? gradeLevels[currentIdx + 1] : null;
+    
+    let nextSY = '';
+    if (currentEnrollment?.school_year) {
+      const parts = currentEnrollment.school_year.split('-');
+      if (parts.length === 2) {
+        nextSY = `${parseInt(parts[0]) + 1}-${parseInt(parts[1]) + 1}`;
+      }
     }
 
-    const gradesByYear = {};
-    grades.forEach(g => {
-      const sy = g.school_year || 'N/A';
-      const gradeLevel = g.grade_level || 'N/A';
-      const key = `${sy}|${gradeLevel}`;
-      if (!gradesByYear[key]) {
-        gradesByYear[key] = { school_year: sy, grade_level: gradeLevel, grades: [] };
-      }
-      gradesByYear[key].grades.push(g);
-    });
-
-    const yearKeys = Object.keys(gradesByYear).sort().reverse();
-
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        {/* Overall Average */}
-        <div style={{
-          background: 'white', borderRadius: '12px', padding: '24px',
-          border: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-            <div>
-              <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                General Average
-              </div>
-              <div style={{
-                fontSize: '42px', fontWeight: '800', marginTop: '4px',
-                color: parseFloat(calculateOverallAverage()) >= 75 ? '#065f46' : '#991b1b'
-              }}>
-                {calculateOverallAverage()}
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '24px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        {/* Current Enrollment Info */}
+        {currentEnrollment && (
+          <div style={{
+            background: 'white', padding: '24px', borderRadius: '14px',
+            border: '1px solid #e5e7eb',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+          }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1f2937', marginBottom: '16px' }}>
+              📋 Current Enrollment
+            </h3>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+              gap: '16px'
+            }}>
               <div>
-                <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>Subjects</div>
-                <div style={{ fontSize: '24px', fontWeight: '700', color: '#1f2937' }}>
-                  {Object.keys(groupGradesBySubject(grades).reduce((acc, s) => { acc[s.subject] = true; return acc; }, {})).length}
+                <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>Grade Level</div>
+                <div style={{ fontSize: '18px', fontWeight: '700', color: '#1f2937', marginTop: '4px' }}>
+                  {currentEnrollment.grade_level}
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>Total Grades</div>
-                <div style={{ fontSize: '24px', fontWeight: '700', color: '#1f2937' }}>{grades.length}</div>
+                <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>School Year</div>
+                <div style={{ fontSize: '18px', fontWeight: '700', color: '#1f2937', marginTop: '4px' }}>
+                  {currentEnrollment.school_year}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>Section</div>
+                <div style={{ fontSize: '18px', fontWeight: '700', color: '#1f2937', marginTop: '4px' }}>
+                  {currentEnrollment.section_name || '—'}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>Status</div>
+                <div style={{
+                  fontSize: '14px', fontWeight: '700', marginTop: '4px',
+                  textTransform: 'capitalize',
+                  color: currentEnrollment.status === 'passed' ? '#065f46' :
+                         currentEnrollment.status === 'enrolled' ? '#1a56db' : '#6b7280'
+                }}>
+                  {currentEnrollment.status}
+                </div>
               </div>
             </div>
           </div>
+        )}
+
+        {/* Pending Request */}
+        {pendingRequest && (
+          <div style={{
+            background: '#fef3c7', padding: '24px', borderRadius: '14px',
+            border: '2px solid #f59e0b'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+              <span style={{ fontSize: '36px' }}>⏳</span>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#92400e' }}>
+                  Re-enrollment Pending
+                </h3>
+                <p style={{ margin: '4px 0 0', fontSize: '14px', color: '#92400e' }}>
+                  Naghulat pa sa approval sa registrar.
+                </p>
+              </div>
+            </div>
+            <div style={{
+              background: 'rgba(255,255,255,0.6)',
+              padding: '12px 16px',
+              borderRadius: '8px',
+              fontSize: '14px',
+              color: '#92400e',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '8px'
+            }}>
+              <div><strong>Applying for:</strong> {pendingRequest.next_grade_level}</div>
+              <div><strong>School Year:</strong> {pendingRequest.next_school_year}</div>
+              <div><strong>Average:</strong> {pendingRequest.average_grade}</div>
+              <div><strong>Submitted:</strong> {new Date(pendingRequest.created_at).toLocaleDateString()}</div>
+            </div>
+          </div>
+        )}
+
+        {/* Approved */}
+        {approvedRequest && !pendingRequest && (
+          <div style={{
+            background: '#d1fae5', padding: '24px', borderRadius: '14px',
+            border: '2px solid #10b981'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '36px' }}>✅</span>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#065f46' }}>
+                  Re-enrollment Approved!
+                </h3>
+                <p style={{ margin: '4px 0 0', fontSize: '14px', color: '#065f46' }}>
+                  Enrolled na sa <strong>{approvedRequest.next_grade_level}</strong> (SY {approvedRequest.next_school_year}).
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Apply Button */}
+        {canApply && (
+          <div style={{
+            background: 'linear-gradient(135deg, #10b981, #34d399)',
+            padding: '32px', borderRadius: '14px', color: 'white',
+            textAlign: 'center', boxShadow: '0 8px 25px rgba(16,185,129,0.3)'
+          }}>
+            <div style={{ fontSize: '64px', marginBottom: '12px' }}>🎓</div>
+            <h3 style={{ fontSize: '24px', fontWeight: '700', margin: '0 0 8px' }}>
+              Ready for {nextGrade}!
+            </h3>
+            <p style={{ fontSize: '14px', opacity: 0.95, marginBottom: '24px', maxWidth: '500px', margin: '0 auto 24px' }}>
+              Mana ka na sa <strong>{currentEnrollment.grade_level}</strong>. Pwede na ka mo-apply para sa <strong>{nextGrade}</strong> sa sunod nga school year.
+            </p>
+            <button
+              onClick={() => {
+                setReenrollRemarks('');
+                setReenrollMessage({ type: '', text: '' });
+                setShowReenrollModal(true);
+              }}
+              style={{
+                background: 'white',
+                color: '#065f46',
+                border: 'none',
+                padding: '14px 32px',
+                borderRadius: '10px',
+                fontSize: '16px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                boxShadow: '0 4px 15px rgba(0,0,0,0.15)'
+              }}
+            >
+              📝 Apply for {nextGrade}
+            </button>
+          </div>
+        )}
+
+        {/* Not Eligible */}
+        {!canApply && !pendingRequest && !approvedRequest && (
+          <div style={{
+            background: 'white', padding: '60px', borderRadius: '14px',
+            textAlign: 'center', color: '#6b7280',
+            border: '1px solid #e5e7eb'
+          }}>
+            <div style={{ fontSize: '64px', marginBottom: '12px' }}>
+              {isGrade6 ? '🎓' : '⏳'}
+            </div>
+            <h3 style={{ color: '#1f2937', marginBottom: '8px', fontSize: '20px' }}>
+              {isGrade6 ? 'Grade 6 Student' : 'Not Yet Eligible'}
+            </h3>
+            <p style={{ fontSize: '14px', maxWidth: '400px', margin: '0 auto' }}>
+              {isGrade6 
+                ? 'Kung ma-complete nimo ang Grade 6, mag-graduate ka na. Wala nay next grade level.'
+                : 'Kinahanglan nimo ma-complete ang current grade una mo maka-apply for next grade.'
+              }
+            </p>
+          </div>
+        )}
+
+        {/* History */}
+        {reenrollRequests.length > 0 && (
+          <div style={{
+            background: 'white', padding: '24px', borderRadius: '14px',
+            border: '1px solid #e5e7eb',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+          }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1f2937', marginBottom: '16px' }}>
+              📜 Request History ({reenrollRequests.length})
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {reenrollRequests.map(r => (
+                <div key={r.id} style={{
+                  padding: '16px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '10px',
+                  background: '#f9fafb',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '12px'
+                }}>
+                  <div style={{ flex: 1, minWidth: '200px' }}>
+                    <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
+                      {r.current_grade_level} → {r.next_grade_level}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                      SY {r.next_school_year} • Submitted {new Date(r.created_at).toLocaleDateString()}
+                    </div>
+                    {r.average_grade && (
+                      <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
+                        Average: <strong>{r.average_grade}</strong>
+                      </div>
+                    )}
+                    {r.registrar_remarks && (
+                      <div style={{
+                        fontSize: '12px',
+                        color: r.status === 'rejected' ? '#991b1b' : '#6b7280',
+                        fontStyle: 'italic',
+                        marginTop: '6px',
+                        padding: '6px 10px',
+                        background: r.status === 'rejected' ? '#fee2e2' : '#f3f4f6',
+                        borderRadius: '6px'
+                      }}>
+                        Registrar: "{r.registrar_remarks}"
+                      </div>
+                    )}
+                  </div>
+                  <span style={{
+                    padding: '6px 16px', borderRadius: '12px',
+                    fontSize: '12px', fontWeight: '700',
+                    textTransform: 'uppercase',
+                    background: r.status === 'approved' ? '#d1fae5' :
+                                r.status === 'rejected' ? '#fee2e2' : '#fef3c7',
+                    color: r.status === 'approved' ? '#065f46' :
+                           r.status === 'rejected' ? '#991b1b' : '#92400e'
+                  }}>{r.status}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ============ GRADES ============
+  const renderGrades = () => (
+    <div>
+      {gradesBySY.length === 0 ? (
+        <div style={{
+          background: 'white', padding: '60px', borderRadius: '14px',
+          textAlign: 'center', color: '#6b7280', border: '1px solid #e5e7eb'
+        }}>
+          <div style={{ fontSize: '48px', marginBottom: '8px' }}>📭</div>
+          <h3 style={{ color: '#1f2937', marginBottom: '8px' }}>No Grades Yet</h3>
+          <p style={{ fontSize: '14px' }}>Wala pay grades nga gi-record.</p>
         </div>
-
-        {/* Tables per SY */}
-        {yearKeys.map(key => {
-          const yearData = gradesByYear[key];
-          const groupedSubjects = groupGradesBySubject(yearData.grades);
-
-          return (
-            <div key={key} style={{
-              background: 'white', borderRadius: '12px',
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {gradesBySY.map((group, idx) => (
+            <div key={idx} style={{
+              background: 'white', borderRadius: '14px',
               border: '1px solid #e5e7eb', overflow: 'hidden',
               boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
             }}>
-              {/* SY Header */}
               <div style={{
-                padding: '14px 20px',
-                background: 'linear-gradient(135deg, #800000, #a52a2a)',
+                padding: '16px 24px',
+                background: 'linear-gradient(135deg, #1a56db, #3b82f6)',
                 color: 'white',
-                display: 'flex', justifyContent: 'space-between',
-                alignItems: 'center', flexWrap: 'wrap', gap: '8px'
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '12px'
               }}>
                 <div>
-                  <span style={{ fontSize: '16px', fontWeight: '700' }}>🎓 {yearData.grade_level}</span>
-                  <span style={{ fontSize: '13px', marginLeft: '12px', opacity: 0.9 }}>S.Y. {yearData.school_year}</span>
+                  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>
+                    🎓 {group.grade_level}
+                  </h3>
+                  <p style={{ margin: '4px 0 0', fontSize: '13px', opacity: 0.9 }}>
+                    School Year {group.school_year}
+                  </p>
                 </div>
-                <div style={{ fontSize: '13px', opacity: 0.9 }}>
-                  {groupedSubjects.length} subject{groupedSubjects.length !== 1 ? 's' : ''}
+                <div style={{
+                  background: 'rgba(255,255,255,0.2)',
+                  padding: '6px 14px',
+                  borderRadius: '12px',
+                  fontSize: '13px',
+                  fontWeight: '600'
+                }}>
+                  Ave: {group.overallAverage}
                 </div>
               </div>
 
-              {/* Table */}
               <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
-                    <tr style={{ background: '#800000', color: 'white' }}>
-                      <th style={{ padding: '14px 16px', textAlign: 'left', fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', minWidth: '200px', borderRight: '1px solid rgba(255,255,255,0.15)' }}>SUBJECTS</th>
-                      <th style={{ padding: '14px 12px', textAlign: 'center', fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', width: '90px', borderRight: '1px solid rgba(255,255,255,0.15)' }}>Q1</th>
-                      <th style={{ padding: '14px 12px', textAlign: 'center', fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', width: '90px', borderRight: '1px solid rgba(255,255,255,0.15)' }}>Q2</th>
-                      <th style={{ padding: '14px 12px', textAlign: 'center', fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', width: '90px', borderRight: '1px solid rgba(255,255,255,0.15)' }}>Q3</th>
-                      <th style={{ padding: '14px 12px', textAlign: 'center', fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', width: '90px', borderRight: '1px solid rgba(255,255,255,0.15)' }}>Q4</th>
-                      <th style={{ padding: '14px 12px', textAlign: 'center', fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', width: '110px', borderRight: '1px solid rgba(255,255,255,0.15)' }}>FINAL AVE</th>
-                      <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', width: '140px' }}>REMARKS</th>
+                    <tr style={{ background: '#f9fafb', borderBottom: '2px solid #e5e7eb' }}>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Subject</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', width: '70px' }}>Q1</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', width: '70px' }}>Q2</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', width: '70px' }}>Q3</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', width: '70px' }}>Q4</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', width: '100px' }}>Final Ave</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Remarks</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {groupedSubjects.map((subjectData) => {
-                      const finalAvg = computeFinalAverage(subjectData.quarters);
-                      const finalRemarks = finalAvg ? getAutoRemarks(finalAvg) : '';
-                      const avgColor = finalAvg ? gradeColor(finalAvg) : null;
-                      const remColor = finalRemarks ? remarksColor(finalRemarks) : null;
-
+                    {group.subjectAverages.map((subj, sidx) => {
+                      const gc = getGradeColor(subj.finalAve);
                       return (
-                        <tr key={subjectData.subject} style={{ borderBottom: '1px solid #e5e7eb', background: 'white' }}>
-                          <td style={{ padding: '14px 16px', fontSize: '14px', fontWeight: '600', color: '#1f2937', borderRight: '1px solid #f3f4f6' }}>
-                            {subjectData.subject}
+                        <tr key={sidx} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                          <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: '600', color: '#1f2937' }}>{subj.subject}</td>
+                          <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', color: '#6b7280' }}>
+                            {subj.q1 ? subj.q1.toFixed(2) : '—'}
                           </td>
-
-                          {/* Simple quarters — no color */}
-                          {['1st Quarter', '2nd Quarter', '3rd Quarter', '4th Quarter'].map(q => {
-                            const grade = subjectData.quarters[q];
-                            return (
-                              <td key={q} style={{
-                                padding: '14px 8px', textAlign: 'center', fontSize: '14px',
-                                color: grade !== null ? '#1f2937' : '#d1d5db',
-                                borderRight: '1px solid #f3f4f6',
-                                fontWeight: grade !== null ? '600' : '400'
-                              }}>
-                                {grade !== null ? grade.toFixed(2) : '—'}
-                              </td>
-                            );
-                          })}
-
-                          {/* Final Average with badge */}
-                          <td style={{ padding: '14px 12px', textAlign: 'center', borderRight: '1px solid #f3f4f6' }}>
-                            {finalAvg ? (
-                              <span style={{
-                                display: 'inline-block', padding: '6px 14px',
-                                borderRadius: '12px', fontSize: '14px', fontWeight: '800',
-                                background: avgColor ? avgColor.bg : '#f3f4f6',
-                                color: avgColor ? avgColor.color : '#6b7280'
-                              }}>{finalAvg}</span>
-                            ) : (
-                              <span style={{ color: '#d1d5db', fontSize: '14px' }}>—</span>
-                            )}
+                          <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', color: '#6b7280' }}>
+                            {subj.q2 ? subj.q2.toFixed(2) : '—'}
                           </td>
-
-                          {/* Remarks with badge */}
-                          <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                            {finalRemarks ? (
+                          <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', color: '#6b7280' }}>
+                            {subj.q3 ? subj.q3.toFixed(2) : '—'}
+                          </td>
+                          <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', color: '#6b7280' }}>
+                            {subj.q4 ? subj.q4.toFixed(2) : '—'}
+                          </td>
+                          <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                            {subj.finalAve ? (
                               <span style={{
-                                display: 'inline-block', padding: '6px 14px',
-                                borderRadius: '12px', fontSize: '12px', fontWeight: '700',
-                                background: remColor ? remColor.bg : '#f3f4f6',
-                                color: remColor ? remColor.color : '#6b7280'
-                              }}>{finalRemarks}</span>
-                            ) : (
-                              <span style={{ color: '#d1d5db', fontSize: '12px' }}>—</span>
-                            )}
+                                padding: '4px 12px', borderRadius: '10px',
+                                fontSize: '13px', fontWeight: '700',
+                                background: gc.bg, color: gc.color
+                              }}>{subj.finalAve}</span>
+                            ) : '—'}
+                          </td>
+                          <td style={{ padding: '12px 16px', fontSize: '13px', color: '#6b7280', fontStyle: 'italic' }}>
+                            {subj.remarks || '—'}
                           </td>
                         </tr>
                       );
@@ -627,8 +1063,247 @@ const StudentDashboard = () => {
                 </table>
               </div>
             </div>
-          );
-        })}
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // ============ REPORT CARD ============
+  const renderReportCard = () => {
+    const syList = [...new Set(enrollments.map(e => e.school_year))].sort((a, b) => b.localeCompare(a));
+    
+    if (syList.length === 0) {
+      return (
+        <div style={{
+          background: 'white', padding: '60px', borderRadius: '14px',
+          textAlign: 'center', color: '#6b7280', border: '1px solid #e5e7eb'
+        }}>
+          <div style={{ fontSize: '48px', marginBottom: '8px' }}>📭</div>
+          <h3 style={{ color: '#1f2937', marginBottom: '8px' }}>No Report Card Available</h3>
+          <p style={{ fontSize: '14px' }}>Kinahanglan naay enrollment + grades.</p>
+        </div>
+      );
+    }
+
+    const reportData = getReportCard(reportCardSY || syList[0]);
+
+    return (
+      <div>
+        <div style={{
+          background: 'white', padding: '16px 20px', borderRadius: '12px',
+          marginBottom: '20px', border: '1px solid #e5e7eb',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          flexWrap: 'wrap', gap: '12px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+        }}>
+          <div>
+            <label style={{ marginRight: '10px', fontWeight: '600', color: '#374151', fontSize: '14px' }}>
+              📅 School Year:
+            </label>
+            <select
+              value={reportCardSY}
+              onChange={(e) => setReportCardSY(e.target.value)}
+              style={{
+                padding: '8px 14px', borderRadius: '8px',
+                border: '1px solid #d1d5db', fontSize: '14px',
+                minWidth: '160px', outline: 'none'
+              }}
+            >
+              {syList.map(sy => (
+                <option key={sy} value={sy}>{sy}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={() => window.print()}
+            style={{
+              background: 'linear-gradient(135deg, #1a56db, #3b82f6)',
+              color: 'white', border: 'none',
+              padding: '10px 24px', borderRadius: '10px',
+              fontSize: '14px', fontWeight: '600', cursor: 'pointer',
+              boxShadow: '0 4px 15px rgba(26,86,219,0.3)'
+            }}
+          >
+            🖨️ Print Report Card
+          </button>
+        </div>
+
+        <div id="report-card" style={{
+          background: 'white', borderRadius: '14px',
+          border: '1px solid #e5e7eb',
+          padding: '40px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+        }}>
+          <div style={{ textAlign: 'center', marginBottom: '24px', borderBottom: '2px solid #1a56db', paddingBottom: '20px' }}>
+            <div style={{ fontSize: '28px', marginBottom: '4px' }}>🎓</div>
+            <h1 style={{ margin: 0, fontSize: '22px', fontWeight: '700', color: '#1a56db' }}>
+              NCDC ELEMENTARY SCHOOL
+            </h1>
+            <p style={{ margin: '4px 0 0', fontSize: '14px', color: '#6b7280' }}>
+              National Children Development Center
+            </p>
+            <h2 style={{ margin: '12px 0 0', fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>
+              OFFICIAL REPORT CARD
+            </h2>
+            <p style={{ margin: '4px 0 0', fontSize: '14px', color: '#6b7280' }}>
+              School Year {reportData.school_year}
+            </p>
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '12px',
+            marginBottom: '24px',
+            background: '#f8fafc',
+            padding: '16px',
+            borderRadius: '8px'
+          }}>
+            <div>
+              <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>Student Name</div>
+              <div style={{ fontSize: '15px', fontWeight: '700', color: '#1f2937' }}>
+                {student?.first_name} {student?.middle_name || ''} {student?.last_name}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>Student ID</div>
+              <div style={{ fontSize: '15px', fontWeight: '700', color: '#1f2937' }}>
+                {student?.student_id || 'N/A'}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>Grade Level</div>
+              <div style={{ fontSize: '15px', fontWeight: '700', color: '#1f2937' }}>
+                {reportData.grade_level}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>Section</div>
+              <div style={{ fontSize: '15px', fontWeight: '700', color: '#1f2937' }}>
+                {reportData.section || '—'}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ overflowX: 'auto', marginBottom: '24px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #e5e7eb' }}>
+              <thead>
+                <tr style={{ background: '#1a56db', color: 'white' }}>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '13px', fontWeight: '700', border: '1px solid #e5e7eb' }}>SUBJECTS</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', fontWeight: '700', border: '1px solid #e5e7eb', width: '70px' }}>Q1</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', fontWeight: '700', border: '1px solid #e5e7eb', width: '70px' }}>Q2</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', fontWeight: '700', border: '1px solid #e5e7eb', width: '70px' }}>Q3</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', fontWeight: '700', border: '1px solid #e5e7eb', width: '70px' }}>Q4</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', fontWeight: '700', border: '1px solid #e5e7eb', width: '100px' }}>FINAL</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '13px', fontWeight: '700', border: '1px solid #e5e7eb' }}>REMARKS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reportData.subjects.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                      No grades recorded for this school year.
+                    </td>
+                  </tr>
+                ) : (
+                  reportData.subjects.map((subj, idx) => {
+                    const gc = getGradeColor(subj.finalAve);
+                    return (
+                      <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                        <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: '600', color: '#1f2937', border: '1px solid #e5e7eb' }}>
+                          {subj.subject}
+                        </td>
+                        <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '14px', color: '#374151', border: '1px solid #e5e7eb' }}>
+                          {subj.q1 ? subj.q1.toFixed(2) : '—'}
+                        </td>
+                        <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '14px', color: '#374151', border: '1px solid #e5e7eb' }}>
+                          {subj.q2 ? subj.q2.toFixed(2) : '—'}
+                        </td>
+                        <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '14px', color: '#374151', border: '1px solid #e5e7eb' }}>
+                          {subj.q3 ? subj.q3.toFixed(2) : '—'}
+                        </td>
+                        <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '14px', color: '#374151', border: '1px solid #e5e7eb' }}>
+                          {subj.q4 ? subj.q4.toFixed(2) : '—'}
+                        </td>
+                        <td style={{ padding: '12px 16px', textAlign: 'center', border: '1px solid #e5e7eb' }}>
+                          {subj.finalAve ? (
+                            <span style={{
+                              padding: '4px 12px', borderRadius: '8px',
+                              fontSize: '14px', fontWeight: '700',
+                              background: gc.bg, color: gc.color
+                            }}>{subj.finalAve}</span>
+                          ) : '—'}
+                        </td>
+                        <td style={{ padding: '12px 16px', fontSize: '13px', color: '#6b7280', fontStyle: 'italic', border: '1px solid #e5e7eb' }}>
+                          {subj.finalAve ? getRemarks(subj.finalAve) : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {reportData.subjects.length > 0 && (
+            <div style={{
+              background: 'linear-gradient(135deg, #f0f4ff, #e0e7ff)',
+              padding: '20px',
+              borderRadius: '10px',
+              marginBottom: '24px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}>
+              <div>
+                <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '500' }}>GENERAL AVERAGE</div>
+                <div style={{
+                  fontSize: '32px', fontWeight: '800',
+                  color: parseFloat(reportData.overallAverage) >= 75 ? '#065f46' : '#991b1b'
+                }}>
+                  {reportData.overallAverage}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '500' }}>REMARKS</div>
+                <div style={{
+                  fontSize: '18px', fontWeight: '700',
+                  color: parseFloat(reportData.overallAverage) >= 75 ? '#065f46' : '#991b1b'
+                }}>
+                  {parseFloat(reportData.overallAverage) >= 75 ? 'PASSED' : 'FAILED'}
+                </div>
+                <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '2px' }}>
+                  {getRemarks(reportData.overallAverage)}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div style={{
+            marginTop: '40px',
+            paddingTop: '20px',
+            borderTop: '1px solid #e5e7eb',
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '40px'
+          }}>
+            <div>
+              <div style={{ borderBottom: '1px solid #1f2937', paddingBottom: '4px', marginBottom: '4px' }}></div>
+              <div style={{ fontSize: '12px', color: '#6b7280', textAlign: 'center' }}>Class Adviser</div>
+            </div>
+            <div>
+              <div style={{ borderBottom: '1px solid #1f2937', paddingBottom: '4px', marginBottom: '4px' }}></div>
+              <div style={{ fontSize: '12px', color: '#6b7280', textAlign: 'center' }}>Principal / Registrar</div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '11px', color: '#9ca3af' }}>
+            This is a computer-generated document. No signature required.
+          </div>
+        </div>
       </div>
     );
   };
@@ -660,14 +1335,21 @@ const StudentDashboard = () => {
                 <span style={{
                   padding: '3px 12px', borderRadius: '12px',
                   fontSize: '11px', fontWeight: '600',
-                  background: '#dbeafe', color: '#1a56db', textTransform: 'uppercase'
+                  background: '#dbeafe', color: '#1a56db',
+                  textTransform: 'uppercase'
                 }}>{r.remark_type || 'general'}</span>
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>by {r.created_by_role || 'system'}</span>
+                <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                  by {r.created_by_role || 'system'}
+                </span>
                 <span style={{ fontSize: '12px', color: '#9ca3af' }}>
-                  • {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  • {new Date(r.created_at).toLocaleDateString('en-US', {
+                    month: 'short', day: 'numeric', year: 'numeric'
+                  })}
                 </span>
               </div>
-              <p style={{ margin: 0, color: '#1f2937', fontSize: '14px', lineHeight: '1.6' }}>{r.remark}</p>
+              <p style={{ margin: 0, color: '#1f2937', fontSize: '14px', lineHeight: '1.6' }}>
+                {r.remark}
+              </p>
             </div>
           ))}
         </div>
@@ -704,26 +1386,23 @@ const StudentDashboard = () => {
                   <h4 style={{ margin: '0 0 6px', fontSize: '16px', fontWeight: '700', color: '#1f2937' }}>
                     {e.grade_level} {e.section_name ? `- ${e.section_name}` : ''}
                   </h4>
-                  <div style={{ fontSize: '13px', color: '#6b7280' }}>📅 {e.school_year}</div>
+                  <div style={{ fontSize: '13px', color: '#6b7280' }}>
+                    📅 {e.school_year}
+                  </div>
                 </div>
                 <span style={{
                   padding: '4px 14px', borderRadius: '12px',
                   fontSize: '12px', fontWeight: '600',
                   background: e.status === 'passed' ? '#d1fae5' :
                               e.status === 'failed' ? '#fee2e2' :
-                              e.status === 'graduated' ? '#dbeafe' :
-                              e.status === 'enrolled' ? '#e0e7ff' : '#f3f4f6',
+                              e.status === 'graduated' ? '#ddd6fe' :
+                              e.status === 'enrolled' ? '#dbeafe' : '#f3f4f6',
                   color: e.status === 'passed' ? '#065f46' :
                          e.status === 'failed' ? '#991b1b' :
-                         e.status === 'graduated' ? '#1e40af' :
-                         e.status === 'enrolled' ? '#4338ca' : '#6b7280'
+                         e.status === 'graduated' ? '#6d28d9' :
+                         e.status === 'enrolled' ? '#1a56db' : '#6b7280'
                 }}>{e.status}</span>
               </div>
-              {e.enrolled_at && (
-                <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px' }}>
-                  Enrolled: {new Date(e.enrolled_at).toLocaleDateString()}
-                </div>
-              )}
             </div>
           ))}
         </div>
@@ -740,23 +1419,38 @@ const StudentDashboard = () => {
         border: '1px solid #e5e7eb', padding: '32px'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #e5e7eb', paddingBottom: '12px' }}>
-          <h2 style={{ fontSize: '20px', color: '#1f2937', margin: 0 }}>👤 My Profile</h2>
+          <h2 style={{ fontSize: '20px', color: '#1f2937', margin: 0 }}>
+            👤 My Profile
+          </h2>
           {!editMode ? (
-            <button onClick={handleEditClick} style={{
-              background: '#1a56db', color: 'white', border: 'none',
-              padding: '8px 20px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: '500'
-            }}>✏️ Edit Profile</button>
+            <button
+              onClick={handleEditClick}
+              style={{
+                background: '#1a56db', color: 'white', border: 'none',
+                padding: '8px 20px', borderRadius: '8px',
+                cursor: 'pointer', fontSize: '14px', fontWeight: '500'
+              }}
+            >✏️ Edit Profile</button>
           ) : (
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={handleCancelEdit} style={{
-                background: '#6b7280', color: 'white', border: 'none',
-                padding: '8px 20px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: '500'
-              }}>Cancel</button>
-              <button onClick={handleSaveProfile} disabled={editLoading} style={{
-                background: editLoading ? '#93c5fd' : '#10b981', color: 'white',
-                border: 'none', padding: '8px 20px', borderRadius: '8px',
-                cursor: editLoading ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: '500'
-              }}>{editLoading ? 'Saving...' : '💾 Save'}</button>
+              <button
+                onClick={handleCancelEdit}
+                style={{
+                  background: '#6b7280', color: 'white', border: 'none',
+                  padding: '8px 20px', borderRadius: '8px',
+                  cursor: 'pointer', fontSize: '14px', fontWeight: '500'
+                }}
+              >Cancel</button>
+              <button
+                onClick={handleSaveProfile}
+                disabled={editLoading}
+                style={{
+                  background: editLoading ? '#93c5fd' : '#10b981', color: 'white',
+                  border: 'none', padding: '8px 20px', borderRadius: '8px',
+                  cursor: editLoading ? 'not-allowed' : 'pointer',
+                  fontSize: '14px', fontWeight: '500'
+                }}
+              >{editLoading ? 'Saving...' : '💾 Save'}</button>
             </div>
           )}
         </div>
@@ -773,7 +1467,9 @@ const StudentDashboard = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
             <div>
               <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>Student ID</p>
-              <p style={{ fontSize: '16px', fontWeight: '500', color: '#1f2937', margin: '4px 0' }}>{student.student_id || 'N/A'}</p>
+              <p style={{ fontSize: '16px', fontWeight: '500', color: '#1f2937', margin: '4px 0' }}>
+                {student.student_id || 'N/A'}
+              </p>
             </div>
             <div>
               <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>Full Name</p>
@@ -881,7 +1577,8 @@ const StudentDashboard = () => {
         <div style={{
           padding: '20px 24px',
           borderBottom: '1px solid rgba(255,255,255,0.2)',
-          display: 'flex', alignItems: 'center', gap: '14px', flexShrink: 0
+          display: 'flex', alignItems: 'center', gap: '14px',
+          flexShrink: 0
         }}>
           <div style={{
             width: '48px', height: '48px', borderRadius: '50%',
@@ -985,7 +1682,8 @@ const StudentDashboard = () => {
               display: 'flex', alignItems: 'center', gap: '12px',
               width: '100%', padding: '10px 14px', borderRadius: '8px',
               border: 'none', background: 'transparent', color: '#ef4444',
-              fontWeight: '500', cursor: 'pointer', fontSize: '14px', transition: 'all 0.3s ease'
+              fontWeight: '500', cursor: 'pointer', fontSize: '14px',
+              transition: 'all 0.3s ease'
             }}
             onMouseEnter={(e) => {
               e.target.style.background = 'rgba(239,68,68,0.08)';
@@ -1014,13 +1712,17 @@ const StudentDashboard = () => {
             <h1 style={{ fontSize: '24px', color: '#1f2937', margin: 0, fontWeight: '700' }}>
               {activeMenu === 'dashboard' && '📊 Dashboard'}
               {activeMenu === 'grades' && '📈 My Grades'}
+              {activeMenu === 'reportcard' && '📄 Report Card'}
+              {activeMenu === 'reenrollment' && '🔄 Re-enrollment'}
               {activeMenu === 'remarks' && '💬 My Remarks'}
               {activeMenu === 'history' && '📚 Enrollment History'}
               {activeMenu === 'profile' && '👤 My Profile'}
             </h1>
             <p style={{ color: '#6b7280', margin: '4px 0 0', fontSize: '14px' }}>
               {activeMenu === 'dashboard' && `Welcome back, ${student?.first_name || 'Student'}!`}
-              {activeMenu === 'grades' && 'Report card view — grades per quarter.'}
+              {activeMenu === 'grades' && 'View all your grades per school year.'}
+              {activeMenu === 'reportcard' && 'View and print your official report card.'}
+              {activeMenu === 'reenrollment' && 'Apply for next grade level.'}
               {activeMenu === 'remarks' && 'Remarks from your teacher.'}
               {activeMenu === 'history' && 'Your enrollment records.'}
               {activeMenu === 'profile' && 'View and manage your personal information.'}
@@ -1047,6 +1749,128 @@ const StudentDashboard = () => {
         </div>
       </div>
 
+      {/* RE-ENROLLMENT MODAL */}
+      {showReenrollModal && currentEnrollment && (
+        <div
+          onClick={() => !reenrollSubmitting && setShowReenrollModal(false)}
+          style={{
+            position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+            background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000, padding: '20px'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'white', borderRadius: '16px',
+              maxWidth: '500px', width: '100%', padding: '32px',
+              boxShadow: '0 25px 60px rgba(0,0,0,0.3)'
+            }}
+          >
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <div style={{ fontSize: '56px', marginBottom: '8px' }}>🎓</div>
+              <h2 style={{ fontSize: '22px', color: '#1f2937', margin: '0 0 8px' }}>
+                Re-enrollment Application
+              </h2>
+              <p style={{ color: '#6b7280', fontSize: '14px', margin: 0 }}>
+                Apply for the next grade level
+              </p>
+            </div>
+
+            {/* Application summary */}
+            <div style={{
+              background: '#f0f4ff', padding: '16px', borderRadius: '12px',
+              marginBottom: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+                <span style={{ color: '#6b7280' }}>Current:</span>
+                <strong style={{ color: '#1f2937' }}>{currentEnrollment.grade_level}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+                <span style={{ color: '#6b7280' }}>Applying for:</span>
+                <strong style={{ color: '#1a56db' }}>
+                  {(() => {
+                    const levels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
+                    const idx = levels.indexOf(currentEnrollment.grade_level);
+                    return idx >= 0 && idx < 5 ? levels[idx + 1] : '—';
+                  })()}
+                </strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+                <span style={{ color: '#6b7280' }}>School Year:</span>
+                <strong style={{ color: '#1f2937' }}>
+                  {(() => {
+                    const parts = currentEnrollment.school_year.split('-');
+                    return parts.length === 2 
+                      ? `${parseInt(parts[0]) + 1}-${parseInt(parts[1]) + 1}`
+                      : currentEnrollment.school_year;
+                  })()}
+                </strong>
+              </div>
+            </div>
+
+            {reenrollMessage.text && (
+              <div style={{
+                padding: '12px 16px', borderRadius: '8px', marginBottom: '16px',
+                background: reenrollMessage.type === 'success' ? '#d1fae5' : '#fee2e2',
+                color: reenrollMessage.type === 'success' ? '#065f46' : '#991b1b'
+              }}>{reenrollMessage.text}</div>
+            )}
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{
+                display: 'block', fontSize: '13px', fontWeight: '600',
+                color: '#374151', marginBottom: '6px'
+              }}>
+                Reason / Remarks (Optional)
+              </label>
+              <textarea
+                value={reenrollRemarks}
+                onChange={(e) => setReenrollRemarks(e.target.value)}
+                placeholder="e.g., Ready for next grade, Complete requirements..."
+                rows={3}
+                disabled={reenrollSubmitting}
+                style={{
+                  width: '100%', padding: '10px 14px',
+                  border: '1px solid #d1d5db', borderRadius: '8px',
+                  fontSize: '14px', outline: 'none',
+                  resize: 'vertical', boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={() => setShowReenrollModal(false)}
+                disabled={reenrollSubmitting}
+                style={{
+                  flex: 1, padding: '12px', background: '#f3f4f6',
+                  color: '#6b7280', border: '1px solid #d1d5db',
+                  borderRadius: '10px', fontWeight: '600',
+                  cursor: reenrollSubmitting ? 'not-allowed' : 'pointer',
+                  fontSize: '14px'
+                }}
+              >Cancel</button>
+              <button
+                onClick={handleSubmitReenroll}
+                disabled={reenrollSubmitting}
+                style={{
+                  flex: 1, padding: '12px',
+                  background: reenrollSubmitting ? '#93c5fd' : 'linear-gradient(135deg, #10b981, #34d399)',
+                  color: 'white', border: 'none', borderRadius: '10px',
+                  fontWeight: '600', cursor: reenrollSubmitting ? 'not-allowed' : 'pointer',
+                  fontSize: '14px'
+                }}
+              >{reenrollSubmitting ? 'Submitting...' : '📝 Submit Application'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* CHANGE PASSWORD MODAL */}
       {showPasswordModal && (
         <div style={{
@@ -1062,11 +1886,16 @@ const StudentDashboard = () => {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h2 style={{ fontSize: '20px', color: '#1f2937', margin: 0 }}>🔒 Change Password</h2>
-              <button onClick={() => {
-                setShowPasswordModal(false);
-                setPasswordMessage('');
-                setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-              }} style={{ background: 'transparent', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#9ca3af' }}>×</button>
+              <button
+                onClick={() => {
+                  setShowPasswordModal(false);
+                  setPasswordMessage('');
+                  setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                }}
+                style={{
+                  background: 'transparent', border: 'none',
+                  fontSize: '24px', cursor: 'pointer', color: '#9ca3af'
+                }}>×</button>
             </div>
 
             {passwordMessage && (
@@ -1078,34 +1907,54 @@ const StudentDashboard = () => {
             )}
 
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>Current Password</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
+                Current Password
+              </label>
               <input type="password" name="currentPassword" value={passwordData.currentPassword}
                 onChange={handlePasswordChange} placeholder="Enter current password"
-                style={{ width: '100%', padding: '10px 14px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} />
+                style={{
+                  width: '100%', padding: '10px 14px', border: '1px solid #d1d5db',
+                  borderRadius: '8px', fontSize: '14px', outline: 'none', boxSizing: 'border-box'
+                }} />
             </div>
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>New Password</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
+                New Password
+              </label>
               <input type="password" name="newPassword" value={passwordData.newPassword}
                 onChange={handlePasswordChange} placeholder="New password (min 6 chars)"
-                style={{ width: '100%', padding: '10px 14px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} />
+                style={{
+                  width: '100%', padding: '10px 14px', border: '1px solid #d1d5db',
+                  borderRadius: '8px', fontSize: '14px', outline: 'none', boxSizing: 'border-box'
+                }} />
             </div>
             <div style={{ marginBottom: '24px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>Confirm New Password</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
+                Confirm New Password
+              </label>
               <input type="password" name="confirmPassword" value={passwordData.confirmPassword}
                 onChange={handlePasswordChange} placeholder="Confirm new password"
-                style={{ width: '100%', padding: '10px 14px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} />
+                style={{
+                  width: '100%', padding: '10px 14px', border: '1px solid #d1d5db',
+                  borderRadius: '8px', fontSize: '14px', outline: 'none', boxSizing: 'border-box'
+                }} />
             </div>
 
             <div style={{ display: 'flex', gap: '12px' }}>
-              <button onClick={() => {
-                setShowPasswordModal(false);
-                setPasswordMessage('');
-                setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-              }} style={{ flex: 1, background: '#6b7280', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: '600' }}>Cancel</button>
+              <button
+                onClick={() => {
+                  setShowPasswordModal(false);
+                  setPasswordMessage('');
+                  setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                }}
+                style={{
+                  flex: 1, background: '#6b7280', color: 'white', border: 'none',
+                  padding: '12px', borderRadius: '8px', cursor: 'pointer',
+                  fontSize: '14px', fontWeight: '600'
+                }}>Cancel</button>
               <button onClick={handleSubmitPassword} disabled={passwordLoading}
                 style={{
-                  flex: 1,
-                  background: passwordLoading ? '#93c5fd' : 'linear-gradient(135deg, #1a56db, #3b82f6)',
+                  flex: 1, background: passwordLoading ? '#93c5fd' : 'linear-gradient(135deg, #1a56db, #3b82f6)',
                   color: 'white', border: 'none', padding: '12px',
                   borderRadius: '8px', cursor: passwordLoading ? 'not-allowed' : 'pointer',
                   fontSize: '14px', fontWeight: '600'
@@ -1114,6 +1963,26 @@ const StudentDashboard = () => {
           </div>
         </div>
       )}
+
+      {/* Print CSS */}
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #report-card, #report-card * {
+            visibility: visible;
+          }
+          #report-card {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            border: none !important;
+            box-shadow: none !important;
+          }
+        }
+      `}</style>
     </div>
   );
 };

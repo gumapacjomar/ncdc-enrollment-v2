@@ -16,6 +16,14 @@ const StudentMonitoring = () => {
     const [activeTab, setActiveTab] = useState('grade');
     const [profilePic, setProfilePic] = useState(null);
 
+    // Graduate State
+    const [graduating, setGraduating] = useState(null);
+    const [showGraduateModal, setShowGraduateModal] = useState(false);
+    const [graduateStudent, setGraduateStudent] = useState(null);
+    const [graduateRemarks, setGraduateRemarks] = useState('');
+    const [graduateMessage, setGraduateMessage] = useState({ type: '', text: '' });
+
+    // View Section Modal
     const [showSectionModal, setShowSectionModal] = useState(false);
     const [viewingSection, setViewingSection] = useState(null);
 
@@ -61,12 +69,7 @@ const StudentMonitoring = () => {
             setStudentsBySection(sectionRes.data || []);
             setStudentsByStatus(statusRes.data || []);
             setSummary(summaryRes.data || {});
-            
-            const enrollments = Array.isArray(enrollRes.data) ? enrollRes.data : [];
-            setAllEnrollments(enrollments);
-            
-            console.log('📋 All Enrollments:', enrollments);
-            console.log('📋 Sections:', sectionRes.data);
+            setAllEnrollments(Array.isArray(enrollRes.data) ? enrollRes.data : []);
         } catch (error) {
             console.error('Error fetching monitoring data:', error);
         } finally {
@@ -74,15 +77,11 @@ const StudentMonitoring = () => {
         }
     };
 
-    // ✅ FIX: Use parseInt for strict comparison + filter by status = 'enrolled'
     const getStudentsInSection = (sectionId) => {
         if (!sectionId) return [];
         return allEnrollments.filter(e => {
-            // ✅ Convert both to integer for comparison
             const enrollmentSectionId = parseInt(e.section_id);
             const targetSectionId = parseInt(sectionId);
-            
-            // Match section ID + only 'enrolled' status (current students)
             return enrollmentSectionId === targetSectionId && e.status === 'enrolled';
         });
     };
@@ -90,11 +89,61 @@ const StudentMonitoring = () => {
     const handleViewSection = (section) => {
         setViewingSection(section);
         setShowSectionModal(true);
-        
-        // Debug: show what's being viewed
-        const students = getStudentsInSection(section.section_id);
-        console.log('🔍 Viewing section:', section);
-        console.log('🔍 Students in section:', students);
+    };
+
+    // ✅ Open Graduate Modal
+    const handleOpenGraduate = (student) => {
+        setGraduateStudent(student);
+        setGraduateRemarks('');
+        setGraduateMessage({ type: '', text: '' });
+        setShowGraduateModal(true);
+    };
+
+    // ✅ Confirm Graduate
+    const handleConfirmGraduate = async () => {
+        if (!graduateStudent) return;
+
+        const confirm = window.confirm(
+            `🎓 GRADUATE STUDENT?\n\n` +
+            `Name: ${graduateStudent.first_name} ${graduateStudent.middle_name || ''} ${graduateStudent.last_name}\n` +
+            `Student ID: ${graduateStudent.public_id}\n` +
+            `Current Grade: ${graduateStudent.current_grade_level}\n\n` +
+            `⚠️ Kini nga aksyon kay dili ma-undo.\n` +
+            `Ang student ma-mark as "Graduated" ug dili na ma-enroll pag-usab.\n\n` +
+            `Magpadayon?`
+        );
+
+        if (!confirm) return;
+
+        setGraduating(graduateStudent.student_id);
+        setGraduateMessage({ type: '', text: '' });
+
+        try {
+            const res = await API.post(`/admin/graduate-student/${graduateStudent.student_id}`, {
+                adminId: user.id,
+                remarks: graduateRemarks || 'Graduated successfully'
+            });
+
+            setGraduateMessage({ type: 'success', text: res.data.message });
+
+            // Refresh data
+            await fetchAllData();
+
+            setTimeout(() => {
+                setShowGraduateModal(false);
+                setGraduateStudent(null);
+                setGraduateRemarks('');
+                setGraduateMessage({ type: '', text: '' });
+            }, 2000);
+        } catch (err) {
+            console.error('Graduate error:', err);
+            setGraduateMessage({
+                type: 'error',
+                text: err.response?.data?.error || 'Failed to graduate student'
+            });
+        } finally {
+            setGraduating(null);
+        }
     };
 
     const menuItems = [
@@ -132,7 +181,7 @@ const StudentMonitoring = () => {
             failed: { bg: '#fee2e2', color: '#991b1b' },
             dropped: { bg: '#fef3c7', color: '#92400e' },
             transferred: { bg: '#e0e7ff', color: '#4338ca' },
-            graduated: { bg: '#d1fae5', color: '#065f46' }
+            graduated: { bg: '#ddd6fe', color: '#6d28d9' }
         };
         return colors[status] || colors.enrolled;
     };
@@ -152,6 +201,7 @@ const StudentMonitoring = () => {
                 {grades.map(grade => {
                     const filtered = filterStudents(studentsByGrade[grade]);
                     if (filtered.length === 0 && searchTerm) return null;
+                    const isGrade6 = grade === 'Grade 6';
                     return (
                         <div key={grade} style={{
                             background: 'white', borderRadius: '14px',
@@ -161,15 +211,23 @@ const StudentMonitoring = () => {
                         }}>
                             <div style={{
                                 padding: '16px 24px',
-                                background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-                                color: 'white'
+                                background: isGrade6 
+                                    ? 'linear-gradient(135deg, #7c3aed, #a855f7)' 
+                                    : 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+                                color: 'white',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
                             }}>
-                                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>
-                                    🎓 {grade}
-                                </h3>
-                                <p style={{ margin: '4px 0 0', fontSize: '13px', opacity: 0.9 }}>
-                                    {studentsByGrade[grade].length} student(s)
-                                </p>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>
+                                        🎓 {grade}
+                                    </h3>
+                                    <p style={{ margin: '4px 0 0', fontSize: '13px', opacity: 0.9 }}>
+                                        {studentsByGrade[grade].length} student(s)
+                                        {isGrade6 && ' — Pwede na i-graduate kung passed tanan subjects'}
+                                    </p>
+                                </div>
                             </div>
                             <div style={{ overflowX: 'auto' }}>
                                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -206,13 +264,48 @@ const StudentMonitoring = () => {
                                                     </span>
                                                 </td>
                                                 <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                                                    <Link to={`/admin/student-history?studentId=${student.student_id}`} style={{
-                                                        background: '#dbeafe', color: '#1a56db',
-                                                        textDecoration: 'none', padding: '6px 14px',
-                                                        borderRadius: '6px', fontSize: '12px', fontWeight: '600'
-                                                    }}>
-                                                        👁️ View History
-                                                    </Link>
+                                                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                                                        <Link to={`/admin/student-history?studentId=${student.student_id}`} style={{
+                                                            background: '#dbeafe', color: '#1a56db',
+                                                            textDecoration: 'none', padding: '6px 14px',
+                                                            borderRadius: '6px', fontSize: '12px', fontWeight: '600'
+                                                        }}>
+                                                            👁️ History
+                                                        </Link>
+                                                        {/* ✅ GRADUATE BUTTON — Only Grade 6 */}
+                                                        {isGrade6 && student.enrollment_status !== 'graduated' && (
+                                                            <button
+                                                                onClick={() => handleOpenGraduate(student)}
+                                                                style={{
+                                                                    background: 'linear-gradient(135deg, #7c3aed, #a855f7)',
+                                                                    color: 'white',
+                                                                    border: 'none',
+                                                                    padding: '6px 14px',
+                                                                    borderRadius: '6px',
+                                                                    fontSize: '12px',
+                                                                    fontWeight: '600',
+                                                                    cursor: 'pointer',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '4px'
+                                                                }}
+                                                            >
+                                                                🎓 Graduate
+                                                            </button>
+                                                        )}
+                                                        {student.enrollment_status === 'graduated' && (
+                                                            <span style={{
+                                                                padding: '6px 14px',
+                                                                background: '#ddd6fe',
+                                                                color: '#6d28d9',
+                                                                borderRadius: '6px',
+                                                                fontSize: '12px',
+                                                                fontWeight: '600'
+                                                            }}>
+                                                                🎓 Graduated
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
@@ -319,7 +412,7 @@ const StudentMonitoring = () => {
         const statusColors = {
             active: { bg: '#d1fae5', color: '#065f46', icon: '✅' },
             enrolled: { bg: '#dbeafe', color: '#1a56db', icon: '🎓' },
-            graduated: { bg: '#dbeafe', color: '#1e40af', icon: '🎓' },
+            graduated: { bg: '#ddd6fe', color: '#6d28d9', icon: '🎓' },
             failed: { bg: '#fee2e2', color: '#991b1b', icon: '❌' },
             dropped: { bg: '#fef3c7', color: '#92400e', icon: '⚠️' },
             transferred: { bg: '#e0e7ff', color: '#4338ca', icon: '➡️' }
@@ -363,9 +456,6 @@ const StudentMonitoring = () => {
         );
     };
 
-    // Students for the modal
-    const viewingStudents = viewingSection ? getStudentsInSection(viewingSection.section_id) : [];
-
     return (
         <div style={{
             minHeight: '100vh',
@@ -394,7 +484,7 @@ const StudentMonitoring = () => {
                         <div>
                             <span style={{ fontSize: '20px', fontWeight: '800', color: '#1f2937' }}>NCDC</span>
                             <br />
-                            <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Admin Panel</span>
+                            <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Principal Panel</span>
                         </div>
                     </div>
                 </div>
@@ -418,14 +508,14 @@ const StudentMonitoring = () => {
                         {profilePic ? (
                             <img src={profilePic} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : (
-                            user?.username?.charAt(0).toUpperCase() || 'A'
+                            user?.username?.charAt(0).toUpperCase() || 'P'
                         )}
                     </div>
                     <div>
                         <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
-                            {user?.username || 'Admin'}
+                            {user?.username || 'Principal'}
                         </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>Administrator</div>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>Principal</div>
                     </div>
                 </Link>
 
@@ -514,11 +604,11 @@ const StudentMonitoring = () => {
                 }}>
                     {[
                         { label: 'Active Students', value: summary.active_students || 0, icon: '👨‍🎓', color: '#10b981' },
-                        { label: 'Graduated', value: summary.graduated_students || 0, icon: '🎓', color: '#3b82f6' },
+                        { label: 'Graduated', value: summary.graduated_students || 0, icon: '🎓', color: '#8b5cf6' },
                         { label: 'Failed', value: summary.failed_students || 0, icon: '❌', color: '#ef4444' },
                         { label: 'Dropped', value: summary.dropped_students || 0, icon: '⚠️', color: '#f59e0b' },
-                        { label: 'Total Sections', value: summary.total_sections || 0, icon: '🏫', color: '#8b5cf6' },
-                        { label: 'Current Enrollments', value: summary.current_enrollments || 0, icon: '📝', color: '#06b6d4' }
+                        { label: 'Total Sections', value: summary.total_sections || 0, icon: '🏫', color: '#06b6d4' },
+                        { label: 'Current Enrollments', value: summary.current_enrollments || 0, icon: '📝', color: '#3b82f6' }
                     ].map((stat, idx) => (
                         <div key={idx} style={{
                             background: 'rgba(255,255,255,0.7)',
@@ -560,14 +650,6 @@ const StudentMonitoring = () => {
                                 fontSize: '14px', outline: 'none', background: '#f9fafb',
                                 boxSizing: 'border-box'
                             }}
-                            onFocus={(e) => {
-                                e.target.style.borderColor = '#1a56db';
-                                e.target.style.background = 'white';
-                            }}
-                            onBlur={(e) => {
-                                e.target.style.borderColor = '#e5e7eb';
-                                e.target.style.background = '#f9fafb';
-                            }}
                         />
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -588,8 +670,7 @@ const StudentMonitoring = () => {
                                     fontWeight: '600',
                                     fontSize: '13px',
                                     cursor: 'pointer',
-                                    transition: 'all 0.3s ease',
-                                    boxShadow: activeTab === tab.id ? '0 4px 12px rgba(26,86,219,0.3)' : 'none'
+                                    transition: 'all 0.3s ease'
                                 }}
                             >
                                 {tab.label}
@@ -619,6 +700,112 @@ const StudentMonitoring = () => {
                     </p>
                 </div>
             </div>
+
+            {/* ✅ GRADUATE MODAL */}
+            {showGraduateModal && graduateStudent && (
+                <div
+                    onClick={() => !graduating && setShowGraduateModal(false)}
+                    style={{
+                        position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        zIndex: 1000, padding: '20px'
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            background: 'white', borderRadius: '16px',
+                            maxWidth: '500px', width: '100%', padding: '32px',
+                            boxShadow: '0 25px 60px rgba(0,0,0,0.3)'
+                        }}
+                    >
+                        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                            <div style={{ fontSize: '64px', marginBottom: '8px' }}>🎓</div>
+                            <h2 style={{ fontSize: '22px', color: '#1f2937', margin: '0 0 8px' }}>
+                                Graduate Student
+                            </h2>
+                            <p style={{ color: '#6b7280', fontSize: '14px' }}>
+                                Kini nga aksyon kay dili ma-undo.
+                            </p>
+                        </div>
+
+                        {/* Student Info */}
+                        <div style={{
+                            background: '#f0f4ff', padding: '16px', borderRadius: '12px',
+                            marginBottom: '16px'
+                        }}>
+                            <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>Student</div>
+                            <div style={{ fontSize: '16px', fontWeight: '700', color: '#1f2937' }}>
+                                {graduateStudent.first_name} {graduateStudent.middle_name || ''} {graduateStudent.last_name}
+                            </div>
+                            <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
+                                {graduateStudent.public_id} • {graduateStudent.current_grade_level}
+                            </div>
+                        </div>
+
+                        {graduateMessage.text && (
+                            <div style={{
+                                padding: '12px 16px', borderRadius: '8px',
+                                marginBottom: '16px',
+                                background: graduateMessage.type === 'success' ? '#d1fae5' : '#fee2e2',
+                                color: graduateMessage.type === 'success' ? '#065f46' : '#991b1b',
+                                border: `1px solid ${graduateMessage.type === 'success' ? '#34d399' : '#fca5a5'}`,
+                                fontSize: '14px'
+                            }}>
+                                {graduateMessage.text}
+                            </div>
+                        )}
+
+                        <div style={{ marginBottom: '20px' }}>
+                            <label style={{
+                                display: 'block', fontSize: '13px', fontWeight: '600',
+                                color: '#374151', marginBottom: '6px'
+                            }}>
+                                Graduation Remarks (Optional)
+                            </label>
+                            <textarea
+                                value={graduateRemarks}
+                                onChange={(e) => setGraduateRemarks(e.target.value)}
+                                placeholder="e.g., Graduated with honors, Complete requirements..."
+                                rows={3}
+                                disabled={graduating}
+                                style={{
+                                    width: '100%', padding: '10px 14px',
+                                    border: '1px solid #d1d5db', borderRadius: '8px',
+                                    fontSize: '14px', outline: 'none',
+                                    resize: 'vertical', boxSizing: 'border-box'
+                                }}
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button
+                                onClick={() => setShowGraduateModal(false)}
+                                disabled={graduating}
+                                style={{
+                                    flex: 1, padding: '12px', background: '#f3f4f6',
+                                    color: '#6b7280', border: '1px solid #d1d5db',
+                                    borderRadius: '10px', fontWeight: '600',
+                                    cursor: graduating ? 'not-allowed' : 'pointer',
+                                    fontSize: '14px'
+                                }}
+                            >Cancel</button>
+                            <button
+                                onClick={handleConfirmGraduate}
+                                disabled={graduating}
+                                style={{
+                                    flex: 1, padding: '12px',
+                                    background: graduating ? '#c4b5fd' : 'linear-gradient(135deg, #7c3aed, #a855f7)',
+                                    color: 'white', border: 'none', borderRadius: '10px',
+                                    fontWeight: '600', cursor: graduating ? 'not-allowed' : 'pointer',
+                                    fontSize: '14px'
+                                }}
+                            >{graduating ? 'Graduating...' : '🎓 Confirm Graduate'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* SECTION MODAL */}
             {showSectionModal && viewingSection && (
@@ -671,11 +858,11 @@ const StudentMonitoring = () => {
                         }}>
                             <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '500' }}>Enrolled Students</div>
                             <div style={{ fontSize: '24px', fontWeight: '800', color: '#1a56db' }}>
-                                {viewingStudents.length} / {viewingSection.max_students || 40}
+                                {getStudentsInSection(viewingSection.section_id).length} / {viewingSection.max_students || 40}
                             </div>
                         </div>
 
-                        {viewingStudents.length === 0 ? (
+                        {getStudentsInSection(viewingSection.section_id).length === 0 ? (
                             <div style={{
                                 padding: '60px 20px', textAlign: 'center',
                                 background: '#f9fafb', borderRadius: '12px',
@@ -697,13 +884,12 @@ const StudentMonitoring = () => {
                                             <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>#</th>
                                             <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Student ID</th>
                                             <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Name</th>
-                                            <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>School Year</th>
+                                            <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>SY</th>
                                             <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Status</th>
-                                            <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Action</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {viewingStudents.map((student, index) => {
+                                        {getStudentsInSection(viewingSection.section_id).map((student, index) => {
                                             const sc = statusColor(student.status);
                                             return (
                                                 <tr key={student.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
@@ -723,18 +909,6 @@ const StudentMonitoring = () => {
                                                             fontSize: '12px', fontWeight: '600',
                                                             background: sc.bg, color: sc.color
                                                         }}>{student.status}</span>
-                                                    </td>
-                                                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                                                        <Link
-                                                            to={`/admin/student-history?studentId=${student.student_id}`}
-                                                            style={{
-                                                                background: '#dbeafe', color: '#1a56db',
-                                                                textDecoration: 'none', padding: '6px 14px',
-                                                                borderRadius: '6px', fontSize: '12px', fontWeight: '600'
-                                                            }}
-                                                        >
-                                                            👁️ View
-                                                        </Link>
                                                     </td>
                                                 </tr>
                                             );

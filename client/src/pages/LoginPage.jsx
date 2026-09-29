@@ -140,7 +140,7 @@ const LoginPage = () => {
           borderRight: '1px solid rgba(255,255,255,0.08)'
         }}>
           <div style={{ position: 'relative', zIndex: 2 }}>
-            {/* Logo - Graduation Cap (same sa homepage) */}
+            {/* Logo - Graduation Cap */}
             <div style={{
               background: 'rgba(255,255,255,0.15)',
               width: '70px',
@@ -294,7 +294,8 @@ const LoginPage = () => {
                       background: 'rgba(255,255,255,0.08)',
                       backdropFilter: 'blur(10px)',
                       color: 'white',
-                      outline: 'none'
+                      outline: 'none',
+                      boxSizing: 'border-box'
                     }}
                     onFocus={(e) => {
                       e.target.style.borderColor = 'rgba(255,255,255,0.5)';
@@ -334,7 +335,8 @@ const LoginPage = () => {
                       background: 'rgba(255,255,255,0.08)',
                       backdropFilter: 'blur(10px)',
                       color: 'white',
-                      outline: 'none'
+                      outline: 'none',
+                      boxSizing: 'border-box'
                     }}
                     onFocus={(e) => {
                       e.target.style.borderColor = 'rgba(255,255,255,0.5)';
@@ -437,7 +439,6 @@ const LoginPage = () => {
                 </p>
               </div>
 
-              {/* Back to Home Button - instead of Login as Guest */}
               <div style={{
                 marginTop: '12px',
                 textAlign: 'center'
@@ -484,7 +485,7 @@ const LoginPage = () => {
                   color: 'rgba(255,255,255,0.8)',
                   fontSize: '14px'
                 }}>
-                  Enter your email address and we'll notify the admin.
+                  Enter your email address and we'll notify the Principal.
                 </p>
               </div>
 
@@ -530,7 +531,8 @@ const LoginPage = () => {
                       background: 'rgba(255,255,255,0.08)',
                       backdropFilter: 'blur(10px)',
                       color: 'white',
-                      outline: 'none'
+                      outline: 'none',
+                      boxSizing: 'border-box'
                     }}
                     onFocus={(e) => {
                       e.target.style.borderColor = 'rgba(255,255,255,0.5)';
@@ -542,7 +544,7 @@ const LoginPage = () => {
                     }}
                   />
                   <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', marginTop: '4px' }}>
-                    We'll notify the admin to generate a temporary password for you.
+                    We'll notify the Principal to generate a temporary password for you.
                   </p>
                 </div>
 

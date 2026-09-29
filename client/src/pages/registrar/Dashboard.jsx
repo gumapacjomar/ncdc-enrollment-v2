@@ -23,14 +23,12 @@ const RegistrarDashboard = () => {
   const [activeMenu, setActiveMenu] = useState('applications');
   const itemsPerPage = 5;
 
-  // ===== EDIT MODAL STATES =====
   const [showEditModal, setShowEditModal] = useState(false);
   const [editData, setEditData] = useState(null);
   const [editLoading, setEditLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editMessage, setEditMessage] = useState('');
 
-  // Add Application States
   const [showAddModal, setShowAddModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
@@ -60,9 +58,9 @@ const RegistrarDashboard = () => {
     academicYear: '2026-2027'
   });
 
-  // Settings States
   const [settings, setSettings] = useState({
     academicYear: '2026-2027',
+    semester: 'Full Year',
     ageMin: 5,
     ageMax: 15,
     requirements: ['Birth Certificate', 'Immunization Record', 'Medical Clearance', '2x2 ID Picture']
@@ -70,13 +68,11 @@ const RegistrarDashboard = () => {
   const [settingsMessage, setSettingsMessage] = useState('');
   const [settingsMessageType, setSettingsMessageType] = useState('');
 
-  const gradeLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
-
-  // Profile Picture State
   const [profilePic, setProfilePic] = useState(null);
   const user = JSON.parse(localStorage.getItem('user'));
 
-  // Fetch profile picture
+  const gradeLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
+
   useEffect(() => {
     if (user && user.role === 'registrar') {
       fetchRegistrarProfile();
@@ -167,7 +163,7 @@ const RegistrarDashboard = () => {
     try {
       await API.put(`/registrar/approve/${applicationId}`, {
         registrarId: user.id,
-        remarks: remarks || 'Approved by Registrar'
+        remarks: remarks || 'Approved by Teacher'
       });
       alert('✅ Application approved successfully!');
       setShowModal(false);
@@ -188,7 +184,7 @@ const RegistrarDashboard = () => {
     try {
       await API.put(`/registrar/decline/${applicationId}`, {
         registrarId: user.id,
-        remarks: reason || 'Declined by Registrar'
+        remarks: reason || 'Declined by Teacher'
       });
       alert('✅ Application declined successfully!');
       setShowModal(false);
@@ -206,7 +202,6 @@ const RegistrarDashboard = () => {
     setShowModal(true);
   };
 
-  // ===== EDIT FUNCTIONS =====
   const handleEdit = async (applicationId) => {
     setEditLoading(true);
     setShowEditModal(true);
@@ -245,7 +240,6 @@ const RegistrarDashboard = () => {
         address: editData.address,
         contact_number: editData.contact_number,
         email: editData.email,
-        current_grade_level: editData.current_grade_level,
         father_name: editData.father_name,
         father_occupation: editData.father_occupation,
         father_contact: editData.father_contact,
@@ -273,7 +267,6 @@ const RegistrarDashboard = () => {
     }
   };
 
-  // ========== ADD APPLICATION FUNCTIONS ==========
   const handleAddChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({
@@ -282,36 +275,24 @@ const RegistrarDashboard = () => {
     }));
   };
 
-  // ✅ UPDATED: Gamiton ang walk-in endpoint (auto-approved)
   const handleAddSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     setMessage('');
 
-    // Validation
-    if (!formData.firstName || !formData.lastName || !formData.birthDate || !formData.gender || !formData.address || !formData.email) {
-      setMessage({ type: 'error', text: 'Please fill in all required fields' });
-      setSubmitting(false);
-      return;
-    }
-
-    if (!formData.gradeLevel) {
-      setMessage({ type: 'error', text: 'Grade level is required' });
+    if (!formData.firstName || !formData.lastName || !formData.birthDate || !formData.gender || !formData.address || !formData.email || !formData.gradeLevel) {
+      setMessage({ type: 'error', text: 'Please fill in all required fields (including Grade Level)' });
       setSubmitting(false);
       return;
     }
 
     try {
-      // ✅ WALK-IN: Auto-approved, diretso sa admin
-      const response = await API.post('/registrar/walk-in', {
+      // ✅ WALK-IN endpoint (auto-approve)
+      const response = await API.post('/registrar/apply-walkin', {
         ...formData,
         registrarId: user.id
       });
-      
-      setMessage({ 
-        type: 'success', 
-        text: '✅ Walk-in application created! Ready for admin confirmation.' 
-      });
+      setMessage({ type: 'success', text: '✅ ' + response.data.message });
       
       setFormData({
         firstName: '',
@@ -409,8 +390,10 @@ const RegistrarDashboard = () => {
     { id: 'sections', icon: '🏫', label: 'Sections', type: 'link', path: '/registrar/sections' },
     { id: 'subjects', icon: '📚', label: 'Subjects', type: 'link', path: '/registrar/subjects' },
     { id: 'enrollments', icon: '📝', label: 'Enrollments', type: 'link', path: '/registrar/enrollments' },
+    { id: 'reenrollment', icon: '🔄', label: 'Re-enrollment', type: 'link', path: '/registrar/re-enrollment-requests' },
     { id: 'grades', icon: '📊', label: 'Grades', type: 'link', path: '/registrar/grades' },
     { id: 'remarks', icon: '💬', label: 'Remarks', type: 'link', path: '/registrar/remarks' },
+    { id: 'student-history', icon: '📚', label: 'Student History', type: 'link', path: '/registrar/student-history' },
     { id: 'settings', icon: '⚙️', label: 'Settings', type: 'internal' }
   ];
 
@@ -456,8 +439,10 @@ const RegistrarDashboard = () => {
         marginBottom: '28px'
       }}>
         <div style={{
-          background: 'white', padding: '24px 20px', borderRadius: '14px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #e5e7eb'
+          background: 'white', padding: '24px 20px',
+          borderRadius: '14px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+          border: '1px solid #e5e7eb'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
@@ -468,8 +453,10 @@ const RegistrarDashboard = () => {
           </div>
         </div>
         <div style={{
-          background: 'white', padding: '24px 20px', borderRadius: '14px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #e5e7eb',
+          background: 'white', padding: '24px 20px',
+          borderRadius: '14px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+          border: '1px solid #e5e7eb',
           borderTop: '4px solid #f59e0b'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -481,8 +468,10 @@ const RegistrarDashboard = () => {
           </div>
         </div>
         <div style={{
-          background: 'white', padding: '24px 20px', borderRadius: '14px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #e5e7eb',
+          background: 'white', padding: '24px 20px',
+          borderRadius: '14px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+          border: '1px solid #e5e7eb',
           borderTop: '4px solid #10b981'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -494,8 +483,10 @@ const RegistrarDashboard = () => {
           </div>
         </div>
         <div style={{
-          background: 'white', padding: '24px 20px', borderRadius: '14px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #e5e7eb',
+          background: 'white', padding: '24px 20px',
+          borderRadius: '14px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+          border: '1px solid #e5e7eb',
           borderTop: '4px solid #ef4444'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -509,8 +500,9 @@ const RegistrarDashboard = () => {
       </div>
 
       <div style={{
-        background: 'white', padding: '14px 20px', borderRadius: '12px',
-        marginBottom: '24px', border: '1px solid #e5e7eb',
+        background: 'white', padding: '14px 20px',
+        borderRadius: '12px', marginBottom: '24px',
+        border: '1px solid #e5e7eb',
         boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
       }}>
         <input
@@ -521,19 +513,21 @@ const RegistrarDashboard = () => {
           style={{
             width: '100%', padding: '10px 16px',
             border: '1px solid #e5e7eb', borderRadius: '8px',
-            fontSize: '14px', outline: 'none', background: '#f9fafb',
-            boxSizing: 'border-box'
+            fontSize: '14px', outline: 'none',
+            background: '#f9fafb', boxSizing: 'border-box'
           }}
         />
       </div>
 
       <div style={{
-        background: 'white', padding: '24px', borderRadius: '14px',
-        border: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+        background: 'white', padding: '24px',
+        borderRadius: '14px',
+        border: '1px solid #e5e7eb',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1f2937' }}>
-            📋 Pending Applications (Online)
+            📋 Pending Applications
           </h3>
           <span style={{ fontSize: '13px', color: '#6b7280' }}>
             {filteredApplications.length} applications
@@ -556,29 +550,19 @@ const RegistrarDashboard = () => {
                 <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
                   <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>#</th>
                   <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Name</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Grade</th>
                   <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Email</th>
                   <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Contact</th>
                   <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Status</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Date</th>
                   <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {paginatedApps.map((app, index) => (
-                  <tr key={app.application_id} style={{ borderBottom: '1px solid #e5e7eb' }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                  <tr key={app.application_id} style={{ borderBottom: '1px solid #e5e7eb' }}>
                     <td style={{ padding: '12px 16px', fontSize: '14px', color: '#6b7280' }}>{startIndex + index + 1}</td>
                     <td style={{ padding: '12px 16px', fontSize: '14px', color: '#1f2937', fontWeight: '500' }}>
                       {app.first_name} {app.middle_name || ''} {app.last_name} {app.suffix || ''}
-                    </td>
-                    <td style={{ padding: '12px 16px', fontSize: '13px' }}>
-                      <span style={{
-                        padding: '3px 10px', background: '#dbeafe', color: '#1a56db',
-                        borderRadius: '10px', fontSize: '11px', fontWeight: '600'
-                      }}>
-                        {app.current_grade_level || 'N/A'}
-                      </span>
                     </td>
                     <td style={{ padding: '12px 16px', fontSize: '14px', color: '#6b7280' }}>{app.email}</td>
                     <td style={{ padding: '12px 16px', fontSize: '14px', color: '#6b7280' }}>{app.contact_number || '—'}</td>
@@ -586,6 +570,9 @@ const RegistrarDashboard = () => {
                       <span style={statusBadgeStyle(app.status)}>
                         {getStatusLabel(app.status)}
                       </span>
+                    </td>
+                    <td style={{ padding: '12px 16px', fontSize: '13px', color: '#6b7280' }}>
+                      {new Date(app.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                       <button
@@ -596,9 +583,7 @@ const RegistrarDashboard = () => {
                           borderRadius: '6px', cursor: 'pointer',
                           fontSize: '13px', fontWeight: '500', width: '80px'
                         }}
-                      >
-                        👁️ View
-                      </button>
+                      >👁️ View</button>
                     </td>
                   </tr>
                 ))}
@@ -611,10 +596,11 @@ const RegistrarDashboard = () => {
           <div style={{
             padding: '14px 0 0', borderTop: '1px solid #e5e7eb',
             marginTop: '16px', display: 'flex',
-            justifyContent: 'space-between', alignItems: 'center'
+            justifyContent: 'space-between', alignItems: 'center',
+            flexWrap: 'wrap', gap: '8px'
           }}>
             <span style={{ fontSize: '13px', color: '#6b7280' }}>
-              Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredApplications.length)} of {filteredApplications.length}
+              Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredApplications.length)} of {filteredApplications.length} applications
             </span>
             <div style={{ display: 'flex', gap: '6px' }}>
               <button
@@ -624,11 +610,13 @@ const RegistrarDashboard = () => {
                   padding: '6px 14px', border: '1px solid #d1d5db',
                   borderRadius: '6px', background: 'white',
                   cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                  fontSize: '13px', color: currentPage === 1 ? '#9ca3af' : '#374151'
+                  fontSize: '13px',
+                  color: currentPage === 1 ? '#9ca3af' : '#374151'
                 }}
               >←</button>
               <span style={{
-                padding: '6px 14px', border: '1px solid #1a56db',
+                padding: '6px 14px',
+                border: '1px solid #1a56db',
                 borderRadius: '6px', background: '#dbeafe',
                 color: '#1a56db', fontSize: '13px', fontWeight: '600'
               }}>{currentPage}</span>
@@ -639,7 +627,8 @@ const RegistrarDashboard = () => {
                   padding: '6px 14px', border: '1px solid #d1d5db',
                   borderRadius: '6px', background: 'white',
                   cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                  fontSize: '13px', color: currentPage === totalPages ? '#9ca3af' : '#374151'
+                  fontSize: '13px',
+                  color: currentPage === totalPages ? '#9ca3af' : '#374151'
                 }}
               >→</button>
             </div>
@@ -651,8 +640,10 @@ const RegistrarDashboard = () => {
 
   const renderEnrolledStudents = () => (
     <div style={{
-      background: 'white', padding: '24px', borderRadius: '14px',
-      border: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+      background: 'white', padding: '24px',
+      borderRadius: '14px',
+      border: '1px solid #e5e7eb',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1f2937' }}>
@@ -672,8 +663,8 @@ const RegistrarDashboard = () => {
           style={{
             width: '100%', padding: '10px 16px',
             border: '1px solid #e5e7eb', borderRadius: '8px',
-            fontSize: '14px', outline: 'none', background: '#f9fafb',
-            boxSizing: 'border-box'
+            fontSize: '14px', outline: 'none',
+            background: '#f9fafb', boxSizing: 'border-box'
           }}
         />
       </div>
@@ -690,9 +681,9 @@ const RegistrarDashboard = () => {
                 <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>#</th>
                 <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Student ID</th>
                 <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Name</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Grade</th>
                 <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Email</th>
                 <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Status</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Date Enrolled</th>
               </tr>
             </thead>
             <tbody>
@@ -705,17 +696,12 @@ const RegistrarDashboard = () => {
                   <td style={{ padding: '12px 16px', fontSize: '14px', color: '#1f2937', fontWeight: '500' }}>
                     {student.first_name} {student.middle_name || ''} {student.last_name}
                   </td>
-                  <td style={{ padding: '12px 16px', fontSize: '13px' }}>
-                    <span style={{
-                      padding: '3px 10px', background: '#dbeafe', color: '#1a56db',
-                      borderRadius: '10px', fontSize: '11px', fontWeight: '600'
-                    }}>
-                      {student.current_grade_level || 'N/A'}
-                    </span>
-                  </td>
                   <td style={{ padding: '12px 16px', fontSize: '14px', color: '#6b7280' }}>{student.email}</td>
                   <td style={{ padding: '12px 16px' }}>
                     <span style={statusBadgeStyle('confirmed')}>Enrolled</span>
+                  </td>
+                  <td style={{ padding: '12px 16px', fontSize: '13px', color: '#6b7280' }}>
+                    {new Date(student.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </td>
                 </tr>
               ))}
@@ -728,8 +714,10 @@ const RegistrarDashboard = () => {
 
   const renderSettings = () => (
     <div style={{
-      background: 'white', padding: '32px', borderRadius: '14px',
-      border: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+      background: 'white', padding: '32px',
+      borderRadius: '14px',
+      border: '1px solid #e5e7eb',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
     }}>
       <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1f2937', marginBottom: '8px' }}>
         ⚙️ Settings
@@ -750,9 +738,30 @@ const RegistrarDashboard = () => {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
           <div>
             <label style={labelStyle}>Academic Year</label>
-            <input type="text" value={settings.academicYear}
+            <input
+              type="text"
+              value={settings.academicYear}
               onChange={(e) => setSettings({ ...settings, academicYear: e.target.value })}
-              style={inputStyle} />
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Min Age</label>
+            <input
+              type="number"
+              value={settings.ageMin}
+              onChange={(e) => setSettings({ ...settings, ageMin: parseInt(e.target.value) })}
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Max Age</label>
+            <input
+              type="number"
+              value={settings.ageMax}
+              onChange={(e) => setSettings({ ...settings, ageMax: parseInt(e.target.value) })}
+              style={inputStyle}
+            />
           </div>
         </div>
 
@@ -760,8 +769,9 @@ const RegistrarDashboard = () => {
           type="submit"
           style={{
             marginTop: '24px',
-            background: '#1a56db', color: 'white', border: 'none',
-            padding: '10px 32px', borderRadius: '8px', cursor: 'pointer',
+            background: '#1a56db', color: 'white',
+            border: 'none', padding: '10px 32px',
+            borderRadius: '8px', cursor: 'pointer',
             fontSize: '14px', fontWeight: '600'
           }}
         >💾 Save Settings</button>
@@ -786,7 +796,11 @@ const RegistrarDashboard = () => {
         overflow: 'hidden', flexShrink: 0, zIndex: 50,
         boxShadow: '4px 0 30px rgba(0,0,0,0.06)'
       }}>
-        <div style={{ padding: '24px 24px 20px', borderBottom: '1px solid rgba(255,255,255,0.2)', flexShrink: 0 }}>
+        <div style={{
+          padding: '24px 24px 20px',
+          borderBottom: '1px solid rgba(255,255,255,0.2)',
+          flexShrink: 0
+        }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{
               background: 'linear-gradient(135deg, #1a56db, #3b82f6)',
@@ -797,7 +811,7 @@ const RegistrarDashboard = () => {
             <div>
               <span style={{ fontSize: '18px', fontWeight: '800', color: '#1f2937' }}>NCDC</span>
               <br />
-              <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Registrar Panel</span>
+              <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Teacher Panel</span>
             </div>
           </div>
         </div>
@@ -806,7 +820,7 @@ const RegistrarDashboard = () => {
           textDecoration: 'none', padding: '20px 24px',
           borderBottom: '1px solid rgba(255,255,255,0.2)',
           display: 'flex', alignItems: 'center', gap: '14px',
-          cursor: 'pointer', flexShrink: 0
+          cursor: 'pointer', transition: 'all 0.3s ease', flexShrink: 0
         }}>
           <div style={{
             width: '48px', height: '48px', borderRadius: '50%',
@@ -819,14 +833,14 @@ const RegistrarDashboard = () => {
             {profilePic ? (
               <img src={profilePic} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             ) : (
-              user?.username?.charAt(0).toUpperCase() || 'R'
+              user?.username?.charAt(0).toUpperCase() || 'T'
             )}
           </div>
           <div>
             <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
-              {user?.username || 'Registrar'}
+              {user?.username || 'Teacher'}
             </div>
-            <div style={{ fontSize: '12px', color: '#6b7280' }}>Registrar</div>
+            <div style={{ fontSize: '12px', color: '#6b7280' }}>Teacher / Staff</div>
           </div>
         </Link>
 
@@ -839,16 +853,30 @@ const RegistrarDashboard = () => {
                   width: '100%', padding: '10px 14px', borderRadius: '8px',
                   textDecoration: 'none', background: 'transparent',
                   color: '#6b7280', fontWeight: '500', fontSize: '14px',
-                  marginBottom: '2px', boxSizing: 'border-box'
+                  transition: 'all 0.3s ease', marginBottom: '2px',
+                  position: 'relative', boxSizing: 'border-box'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(0,0,0,0.03)';
+                  e.currentTarget.style.transform = 'translateX(4px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.transform = 'translateX(0)';
                 }}>
                   <span style={{ fontSize: '18px', width: '24px' }}>{item.icon}</span>
                   {item.label}
                 </Link>
               );
             }
+            
             return (
               <button key={item.id}
-                onClick={() => { setActiveMenu(item.id); setSearchTerm(''); setCurrentPage(1); }}
+                onClick={() => {
+                  setActiveMenu(item.id);
+                  setSearchTerm('');
+                  setCurrentPage(1);
+                }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '12px',
                   width: '100%', padding: '10px 14px', borderRadius: '8px',
@@ -857,7 +885,8 @@ const RegistrarDashboard = () => {
                   color: activeMenu === item.id ? '#1a56db' : '#6b7280',
                   fontWeight: activeMenu === item.id ? '600' : '500',
                   cursor: 'pointer', fontSize: '14px',
-                  marginBottom: '2px', position: 'relative', boxSizing: 'border-box'
+                  transition: 'all 0.3s ease', marginBottom: '2px',
+                  position: 'relative'
                 }}>
                 {activeMenu === item.id && (
                   <span style={{
@@ -878,7 +907,8 @@ const RegistrarDashboard = () => {
           padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.2)',
           flexShrink: 0, background: 'rgba(255,255,255,0.3)'
         }}>
-          <button onClick={() => { localStorage.clear(); navigate('/login'); }}
+          <button
+            onClick={() => { localStorage.clear(); navigate('/login'); }}
             style={{
               display: 'flex', alignItems: 'center', gap: '12px',
               width: '100%', padding: '10px 14px', borderRadius: '8px',
@@ -891,30 +921,29 @@ const RegistrarDashboard = () => {
         </div>
       </div>
 
-      {/* MAIN CONTENT */}
       <div style={{
         flex: 1, marginLeft: '280px', padding: '28px 36px',
-        minHeight: '100vh', overflowY: 'auto'
+        minHeight: '100vh', overflowY: 'auto', maxHeight: '100vh'
       }}>
         {activeMenu === 'applications' && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
             <div>
-              <h1 style={{ fontSize: '28px', color: '#1f2937', margin: 0, fontWeight: '700' }}>
-                📋 Registrar Dashboard
+              <h1 style={{ fontSize: '28px', color: '#1f2937', margin: 0, fontWeight: '700', letterSpacing: '-0.5px' }}>
+                📋 Teacher Dashboard
               </h1>
               <p style={{ color: '#6b7280', marginTop: '4px', fontSize: '14px' }}>
                 Manage and review student applications
               </p>
             </div>
-            <button onClick={() => setShowAddModal(true)}
+            <button
+              onClick={() => setShowAddModal(true)}
               style={{
                 background: 'linear-gradient(135deg, #1a56db, #3b82f6)',
                 color: 'white', border: 'none', padding: '10px 24px',
                 borderRadius: '10px', cursor: 'pointer', fontSize: '14px',
                 fontWeight: '600', boxShadow: '0 4px 15px rgba(26,86,219,0.3)'
-              }}>
-              ➕ Add Application
-            </button>
+              }}
+            >➕ Add Application</button>
           </div>
         )}
 
@@ -934,6 +963,9 @@ const RegistrarDashboard = () => {
             <h1 style={{ fontSize: '28px', color: '#1f2937', margin: 0, fontWeight: '700' }}>
               ⚙️ Settings
             </h1>
+            <p style={{ color: '#6b7280', marginTop: '4px', fontSize: '14px' }}>
+              Configure system settings
+            </p>
           </div>
         )}
 
@@ -949,7 +981,215 @@ const RegistrarDashboard = () => {
         </div>
       </div>
 
-      {/* ========== ADD APPLICATION MODAL ========== */}
+      {showModal && selectedApp && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000, padding: '20px'
+        }}>
+          <div style={{
+            background: 'white', borderRadius: '16px',
+            maxWidth: '560px', width: '100%', maxHeight: '80vh',
+            overflowY: 'auto', padding: '32px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '20px', color: '#1f2937', margin: 0 }}>📄 Application Details</h2>
+              <button onClick={() => setShowModal(false)} style={{
+                background: 'transparent', border: 'none',
+                fontSize: '24px', cursor: 'pointer', color: '#9ca3af'
+              }}>×</button>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <p style={{ margin: '4px 0' }}><strong>Name:</strong> {selectedApp.first_name} {selectedApp.middle_name || ''} {selectedApp.last_name} {selectedApp.suffix || ''}</p>
+              <p style={{ margin: '4px 0' }}><strong>Email:</strong> {selectedApp.email}</p>
+              <p style={{ margin: '4px 0' }}><strong>Contact:</strong> {selectedApp.contact_number || 'N/A'}</p>
+              <p style={{ margin: '4px 0' }}><strong>Birth Date:</strong> {selectedApp.birth_date}</p>
+              <p style={{ margin: '4px 0' }}><strong>Gender:</strong> {selectedApp.gender}</p>
+              <p style={{ margin: '4px 0' }}><strong>Address:</strong> {selectedApp.address}</p>
+              <p style={{ margin: '4px 0' }}><strong>Grade Level:</strong> {selectedApp.current_grade_level || 'N/A'}</p>
+            </div>
+
+            <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>Remarks</label>
+              <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)}
+                placeholder="Add remarks..." rows="2"
+                style={{
+                  width: '100%', padding: '10px 14px',
+                  border: '1px solid #d1d5db', borderRadius: '8px',
+                  fontSize: '14px', resize: 'vertical', outline: 'none',
+                  boxSizing: 'border-box'
+                }} />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '20px', flexWrap: 'wrap' }}>
+              <button onClick={() => {
+                setShowModal(false);
+                handleEdit(selectedApp.application_id);
+              }} style={{
+                flex: 1, minWidth: '80px',
+                background: 'linear-gradient(135deg, #f59e0b, #fbbf24)',
+                color: 'white', border: 'none', padding: '12px',
+                borderRadius: '10px', fontWeight: '600', cursor: 'pointer'
+              }}>✏️ Edit</button>
+
+              <button onClick={() => handleApprove(selectedApp.application_id)}
+                disabled={actionLoading} style={{
+                  flex: 1, minWidth: '80px',
+                  background: actionLoading ? '#93c5fd' : 'linear-gradient(135deg, #10b981, #34d399)',
+                  color: 'white', border: 'none', padding: '12px',
+                  borderRadius: '10px', fontWeight: '600',
+                  cursor: actionLoading ? 'not-allowed' : 'pointer'
+                }}>✅ Approve</button>
+
+              <button onClick={() => handleDecline(selectedApp.application_id)}
+                disabled={actionLoading} style={{
+                  flex: 1, minWidth: '80px',
+                  background: actionLoading ? '#93c5fd' : 'linear-gradient(135deg, #ef4444, #f87171)',
+                  color: 'white', border: 'none', padding: '12px',
+                  borderRadius: '10px', fontWeight: '600',
+                  cursor: actionLoading ? 'not-allowed' : 'pointer'
+                }}>❌ Decline</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showEditModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1001, padding: '20px', overflowY: 'auto'
+        }}>
+          <div style={{
+            background: 'white', borderRadius: '16px',
+            maxWidth: '800px', width: '100%', maxHeight: '90vh',
+            overflowY: 'auto', padding: '32px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '20px', color: '#1f2937', margin: 0 }}>✏️ Edit Application</h2>
+              <button onClick={() => {
+                setShowEditModal(false);
+                setEditData(null);
+                setEditMessage('');
+              }} style={{
+                background: 'transparent', border: 'none',
+                fontSize: '24px', cursor: 'pointer', color: '#9ca3af'
+              }}>×</button>
+            </div>
+
+            {editMessage && (
+              <div style={{
+                padding: '12px 16px', borderRadius: '8px', marginBottom: '16px',
+                background: editMessage.includes('✅') ? '#d1fae5' : '#fee2e2',
+                color: editMessage.includes('✅') ? '#065f46' : '#991b1b'
+              }}>{editMessage}</div>
+            )}
+
+            {editLoading ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
+                ⏳ Loading application details...
+              </div>
+            ) : editData ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <h3 style={{ fontSize: '16px', color: '#1a56db', marginBottom: '12px', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px' }}>
+                    👤 Personal Information
+                  </h3>
+                </div>
+
+                <div>
+                  <label style={labelStyle}>First Name *</label>
+                  <input type="text" name="first_name" value={editData.first_name || ''} onChange={handleEditChange} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Middle Name</label>
+                  <input type="text" name="middle_name" value={editData.middle_name || ''} onChange={handleEditChange} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Last Name *</label>
+                  <input type="text" name="last_name" value={editData.last_name || ''} onChange={handleEditChange} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Suffix</label>
+                  <select name="suffix" value={editData.suffix || ''} onChange={handleEditChange} style={inputStyle}>
+                    <option value="">None</option>
+                    <option value="Jr.">Jr.</option>
+                    <option value="Sr.">Sr.</option>
+                    <option value="II">II</option>
+                    <option value="III">III</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Birth Date</label>
+                  <input type="date" name="birth_date" value={editData.birth_date || ''} onChange={handleEditChange} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Gender</label>
+                  <select name="gender" value={editData.gender || ''} onChange={handleEditChange} style={inputStyle}>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={labelStyle}>Address</label>
+                  <input type="text" name="address" value={editData.address || ''} onChange={handleEditChange} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Contact Number</label>
+                  <input type="text" name="contact_number" value={editData.contact_number || ''} onChange={handleEditChange} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Email *</label>
+                  <input type="email" name="email" value={editData.email || ''} onChange={handleEditChange} style={inputStyle} />
+                </div>
+
+                <div style={{ gridColumn: '1 / -1', marginTop: '8px' }}>
+                  <h3 style={{ fontSize: '16px', color: '#1a56db', marginBottom: '12px', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px' }}>
+                    📄 Application Details
+                  </h3>
+                </div>
+
+                <div>
+                  <label style={labelStyle}>Academic Year</label>
+                  <input type="text" name="academic_year" value={editData.academic_year || ''} onChange={handleEditChange} style={inputStyle} />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={labelStyle}>Teacher Remarks</label>
+                  <textarea name="registrar_remarks" value={editData.registrar_remarks || ''} onChange={handleEditChange} style={{ ...inputStyle, minHeight: '80px' }} />
+                </div>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
+                No data found.
+              </div>
+            )}
+
+            {!editLoading && editData && (
+              <div style={{ marginTop: '24px', borderTop: '2px solid #e5e7eb', paddingTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                <button onClick={() => {
+                  setShowEditModal(false);
+                  setEditData(null);
+                  setEditMessage('');
+                }} style={{
+                  background: '#6b7280', color: 'white', border: 'none',
+                  padding: '10px 24px', borderRadius: '8px',
+                  cursor: 'pointer', fontSize: '14px'
+                }}>Cancel</button>
+                <button onClick={handleSaveEdit} disabled={saving} style={{
+                  background: saving ? '#9ca3af' : '#1a56db',
+                  color: 'white', border: 'none',
+                  padding: '10px 24px', borderRadius: '8px',
+                  cursor: saving ? 'not-allowed' : 'pointer', fontSize: '14px'
+                }}>{saving ? '💾 Saving...' : '💾 Save Changes'}</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {showAddModal && (
         <div style={{
           position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
@@ -960,25 +1200,17 @@ const RegistrarDashboard = () => {
           <div style={{
             background: 'white', borderRadius: '16px',
             maxWidth: '700px', width: '100%', maxHeight: '90vh',
-            overflowY: 'auto', padding: '32px',
-            boxShadow: '0 25px 60px rgba(0,0,0,0.3)'
+            overflowY: 'auto', padding: '32px'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h2 style={{ fontSize: '20px', color: '#1f2937', margin: 0 }}>➕ Add Application (Walk-in)</h2>
-              <button onClick={() => { setShowAddModal(false); setMessage(''); }}
-                style={{
-                  background: 'transparent', border: 'none',
-                  fontSize: '24px', cursor: 'pointer', color: '#9ca3af'
-                }}>×</button>
-            </div>
-
-            <div style={{
-              padding: '10px 14px', background: '#fef3c7',
-              color: '#92400e', borderRadius: '8px',
-              marginBottom: '16px', fontSize: '13px',
-              border: '1px solid #f59e0b'
-            }}>
-              ℹ️ <strong>Walk-in Application:</strong> Mo-diretso ni sa Admin para i-confirm. Dili na kailangan ug registrar approval.
+              <button onClick={() => {
+                setShowAddModal(false);
+                setMessage('');
+              }} style={{
+                background: 'transparent', border: 'none',
+                fontSize: '24px', cursor: 'pointer', color: '#9ca3af'
+              }}>×</button>
             </div>
 
             {message && (
@@ -1015,7 +1247,6 @@ const RegistrarDashboard = () => {
                       <option value="Sr.">Sr.</option>
                       <option value="II">II</option>
                       <option value="III">III</option>
-                      <option value="IV">IV</option>
                     </select>
                   </div>
                   <div>
@@ -1029,15 +1260,6 @@ const RegistrarDashboard = () => {
                       <option value="Female">Female</option>
                     </select>
                   </div>
-
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <label style={labelStyle}>Grade Level Applying For *</label>
-                    <select name="gradeLevel" value={formData.gradeLevel} onChange={handleAddChange} required style={inputStyle}>
-                      <option value="">-- Select Grade Level --</option>
-                      {gradeLevels.map(g => <option key={g} value={g}>{g}</option>)}
-                    </select>
-                  </div>
-
                   <div>
                     <label style={labelStyle}>Contact Number</label>
                     <input type="text" name="contactNumber" value={formData.contactNumber} onChange={handleAddChange} style={inputStyle} />
@@ -1050,351 +1272,43 @@ const RegistrarDashboard = () => {
                     <label style={labelStyle}>Email Address *</label>
                     <input type="email" name="email" value={formData.email} onChange={handleAddChange} required style={inputStyle} />
                   </div>
-                </div>
-              </div>
 
-              <div style={{ marginBottom: '24px' }}>
-                <h3 style={{ fontSize: '16px', color: '#1f2937', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px', marginBottom: '16px' }}>
-                  👨‍👩‍👦 Parent/Guardian
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                  <div>
-                    <label style={labelStyle}>Father's Name</label>
-                    <input type="text" name="fatherName" value={formData.fatherName} onChange={handleAddChange} style={inputStyle} />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Father's Occupation</label>
-                    <input type="text" name="fatherOccupation" value={formData.fatherOccupation} onChange={handleAddChange} style={inputStyle} />
-                  </div>
                   <div style={{ gridColumn: '1 / -1' }}>
-                    <label style={labelStyle}>Father's Contact</label>
-                    <input type="text" name="fatherContact" value={formData.fatherContact} onChange={handleAddChange} style={inputStyle} />
+                    <label style={labelStyle}>Grade Level *</label>
+                    <select 
+                      name="gradeLevel" 
+                      value={formData.gradeLevel} 
+                      onChange={handleAddChange} 
+                      required 
+                      style={inputStyle}
+                    >
+                      <option value="">-- Select Grade Level --</option>
+                      {gradeLevels.map(g => (
+                        <option key={g} value={g}>{g}</option>
+                      ))}
+                    </select>
                   </div>
-                  <div>
-                    <label style={labelStyle}>Mother's Name</label>
-                    <input type="text" name="motherName" value={formData.motherName} onChange={handleAddChange} style={inputStyle} />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Mother's Occupation</label>
-                    <input type="text" name="motherOccupation" value={formData.motherOccupation} onChange={handleAddChange} style={inputStyle} />
-                  </div>
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <label style={labelStyle}>Mother's Contact</label>
-                    <input type="text" name="motherContact" value={formData.motherContact} onChange={handleAddChange} style={inputStyle} />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Guardian's Name</label>
-                    <input type="text" name="guardianName" value={formData.guardianName} onChange={handleAddChange} style={inputStyle} />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Guardian's Contact</label>
-                    <input type="text" name="guardianContact" value={formData.guardianContact} onChange={handleAddChange} style={inputStyle} />
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: '24px' }}>
-                <h3 style={{ fontSize: '16px', color: '#1f2937', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px', marginBottom: '16px' }}>
-                  📋 Requirements
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
-                    <input type="checkbox" name="birthCertificate" checked={formData.birthCertificate} onChange={handleAddChange} />
-                    Birth Certificate
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
-                    <input type="checkbox" name="immunizationRecord" checked={formData.immunizationRecord} onChange={handleAddChange} />
-                    Immunization Record
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
-                    <input type="checkbox" name="medicalClearance" checked={formData.medicalClearance} onChange={handleAddChange} />
-                    Medical Clearance
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
-                    <input type="checkbox" name="idPicture" checked={formData.idPicture} onChange={handleAddChange} />
-                    2x2 ID Picture
-                  </label>
                 </div>
               </div>
 
               <div style={{ display: 'flex', gap: '12px' }}>
-                <button type="submit" disabled={submitting}
-                  style={{
-                    flex: 1,
-                    background: submitting ? '#93c5fd' : 'linear-gradient(135deg, #1a56db, #3b82f6)',
-                    color: 'white', border: 'none', padding: '12px',
-                    borderRadius: '10px', fontWeight: '600', fontSize: '16px',
-                    cursor: submitting ? 'not-allowed' : 'pointer'
-                  }}>
-                  {submitting ? 'Submitting...' : '📝 Submit Walk-in Application'}
-                </button>
-                <button type="button" onClick={() => { setShowAddModal(false); setMessage(''); }}
-                  style={{
-                    flex: 1, background: 'transparent', color: '#6b7280',
-                    border: '1px solid #d1d5db', padding: '12px',
-                    borderRadius: '10px', fontWeight: '600', cursor: 'pointer'
-                  }}>Cancel</button>
+                <button type="submit" disabled={submitting} style={{
+                  flex: 1,
+                  background: submitting ? '#93c5fd' : 'linear-gradient(135deg, #1a56db, #3b82f6)',
+                  color: 'white', border: 'none', padding: '12px',
+                  borderRadius: '10px', fontWeight: '600', fontSize: '16px',
+                  cursor: submitting ? 'not-allowed' : 'pointer'
+                }}>{submitting ? 'Submitting...' : '📝 Submit Application'}</button>
+                <button type="button" onClick={() => {
+                  setShowAddModal(false);
+                  setMessage('');
+                }} style={{
+                  flex: 1, background: 'transparent', color: '#6b7280',
+                  border: '1px solid #d1d5db', padding: '12px',
+                  borderRadius: '10px', fontWeight: '600', cursor: 'pointer'
+                }}>Cancel</button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* ========== VIEW APPLICATION MODAL ========== */}
-      {showModal && selectedApp && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 1000, padding: '20px'
-        }}>
-          <div style={{
-            background: 'white', borderRadius: '16px',
-            maxWidth: '560px', width: '100%', maxHeight: '80vh',
-            overflowY: 'auto', padding: '32px',
-            boxShadow: '0 25px 60px rgba(0,0,0,0.3)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2 style={{ fontSize: '20px', color: '#1f2937', margin: 0 }}>📄 Application Details</h2>
-              <button onClick={() => setShowModal(false)}
-                style={{ background: 'transparent', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#9ca3af' }}>×</button>
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <p style={{ margin: '4px 0' }}><strong>Name:</strong> {selectedApp.first_name} {selectedApp.middle_name || ''} {selectedApp.last_name} {selectedApp.suffix || ''}</p>
-              <p style={{ margin: '4px 0' }}><strong>Grade Level:</strong> <span style={{ color: '#1a56db', fontWeight: '600' }}>{selectedApp.current_grade_level || 'N/A'}</span></p>
-              <p style={{ margin: '4px 0' }}><strong>Email:</strong> {selectedApp.email}</p>
-              <p style={{ margin: '4px 0' }}><strong>Contact:</strong> {selectedApp.contact_number || 'N/A'}</p>
-              <p style={{ margin: '4px 0' }}><strong>Birth Date:</strong> {selectedApp.birth_date}</p>
-              <p style={{ margin: '4px 0' }}><strong>Gender:</strong> {selectedApp.gender}</p>
-              <p style={{ margin: '4px 0' }}><strong>Address:</strong> {selectedApp.address}</p>
-            </div>
-
-            <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '16px', marginBottom: '16px' }}>
-              <h4 style={{ marginBottom: '8px', color: '#374151' }}>👨‍👩‍👦 Parents/Guardian</h4>
-              <p style={{ margin: '2px 0', fontSize: '14px' }}><strong>Father:</strong> {selectedApp.father_name || 'N/A'}</p>
-              <p style={{ margin: '2px 0', fontSize: '14px' }}><strong>Mother:</strong> {selectedApp.mother_name || 'N/A'}</p>
-              <p style={{ margin: '2px 0', fontSize: '14px' }}><strong>Guardian:</strong> {selectedApp.guardian_name || 'N/A'}</p>
-            </div>
-
-            <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '16px', marginBottom: '16px' }}>
-              <h4 style={{ marginBottom: '8px', color: '#374151' }}>📋 Requirements</h4>
-              <p style={{ margin: '2px 0', fontSize: '14px' }}>✅ Birth Certificate: {selectedApp.birth_certificate ? 'Uploaded' : 'Not uploaded'}</p>
-              <p style={{ margin: '2px 0', fontSize: '14px' }}>✅ Immunization: {selectedApp.immunization_record ? 'Uploaded' : 'Not uploaded'}</p>
-              <p style={{ margin: '2px 0', fontSize: '14px' }}>✅ Medical Clearance: {selectedApp.medical_clearance ? 'Uploaded' : 'Not uploaded'}</p>
-              <p style={{ margin: '2px 0', fontSize: '14px' }}>✅ ID Picture: {selectedApp.id_picture ? 'Uploaded' : 'Not uploaded'}</p>
-            </div>
-
-            <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '16px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
-                Remarks
-              </label>
-              <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)}
-                placeholder="Add remarks..." rows="2"
-                style={{
-                  width: '100%', padding: '10px 14px',
-                  border: '1px solid #d1d5db', borderRadius: '8px',
-                  fontSize: '14px', resize: 'vertical', outline: 'none',
-                  boxSizing: 'border-box'
-                }} />
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', marginTop: '20px', flexWrap: 'wrap' }}>
-              <button onClick={() => { setShowModal(false); handleEdit(selectedApp.application_id); }}
-                style={{
-                  flex: 1, minWidth: '80px',
-                  background: 'linear-gradient(135deg, #f59e0b, #fbbf24)',
-                  color: 'white', border: 'none', padding: '12px',
-                  borderRadius: '10px', fontWeight: '600', cursor: 'pointer'
-                }}>✏️ Edit</button>
-              <button onClick={() => handleApprove(selectedApp.application_id)} disabled={actionLoading}
-                style={{
-                  flex: 1, minWidth: '80px',
-                  background: actionLoading ? '#93c5fd' : 'linear-gradient(135deg, #10b981, #34d399)',
-                  color: 'white', border: 'none', padding: '12px',
-                  borderRadius: '10px', fontWeight: '600',
-                  cursor: actionLoading ? 'not-allowed' : 'pointer'
-                }}>✅ Approve</button>
-              <button onClick={() => handleDecline(selectedApp.application_id)} disabled={actionLoading}
-                style={{
-                  flex: 1, minWidth: '80px',
-                  background: actionLoading ? '#93c5fd' : 'linear-gradient(135deg, #ef4444, #f87171)',
-                  color: 'white', border: 'none', padding: '12px',
-                  borderRadius: '10px', fontWeight: '600',
-                  cursor: actionLoading ? 'not-allowed' : 'pointer'
-                }}>❌ Decline</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========== EDIT MODAL ========== */}
-      {showEditModal && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 1001, padding: '20px', overflowY: 'auto'
-        }}>
-          <div style={{
-            background: 'white', borderRadius: '16px',
-            maxWidth: '800px', width: '100%', maxHeight: '90vh',
-            overflowY: 'auto', padding: '32px',
-            boxShadow: '0 25px 60px rgba(0,0,0,0.3)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2 style={{ fontSize: '20px', color: '#1f2937', margin: 0 }}>✏️ Edit Application</h2>
-              <button onClick={() => { setShowEditModal(false); setEditData(null); setEditMessage(''); }}
-                style={{ background: 'transparent', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#9ca3af' }}>×</button>
-            </div>
-
-            {editMessage && (
-              <div style={{
-                padding: '12px 16px', borderRadius: '8px', marginBottom: '16px',
-                background: editMessage.includes('✅') ? '#d1fae5' : '#fee2e2',
-                color: editMessage.includes('✅') ? '#065f46' : '#991b1b'
-              }}>{editMessage}</div>
-            )}
-
-            {editLoading ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>⏳ Loading...</div>
-            ) : editData ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <h3 style={{ fontSize: '16px', color: '#1a56db', marginBottom: '12px', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px' }}>
-                    👤 Personal Information
-                  </h3>
-                </div>
-
-                <div>
-                  <label style={labelStyle}>First Name *</label>
-                  <input type="text" name="first_name" value={editData.first_name || ''} onChange={handleEditChange} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Middle Name</label>
-                  <input type="text" name="middle_name" value={editData.middle_name || ''} onChange={handleEditChange} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Last Name *</label>
-                  <input type="text" name="last_name" value={editData.last_name || ''} onChange={handleEditChange} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Suffix</label>
-                  <select name="suffix" value={editData.suffix || ''} onChange={handleEditChange} style={inputStyle}>
-                    <option value="">None</option>
-                    <option value="Jr.">Jr.</option>
-                    <option value="Sr.">Sr.</option>
-                    <option value="II">II</option>
-                    <option value="III">III</option>
-                    <option value="IV">IV</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={labelStyle}>Birth Date</label>
-                  <input type="date" name="birth_date" value={editData.birth_date || ''} onChange={handleEditChange} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Gender</label>
-                  <select name="gender" value={editData.gender || ''} onChange={handleEditChange} style={inputStyle}>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                  </select>
-                </div>
-
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={labelStyle}>Grade Level *</label>
-                  <select name="current_grade_level" value={editData.current_grade_level || ''} onChange={handleEditChange} style={inputStyle}>
-                    <option value="">-- Select Grade Level --</option>
-                    {gradeLevels.map(g => <option key={g} value={g}>{g}</option>)}
-                  </select>
-                </div>
-
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={labelStyle}>Address</label>
-                  <input type="text" name="address" value={editData.address || ''} onChange={handleEditChange} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Contact Number</label>
-                  <input type="text" name="contact_number" value={editData.contact_number || ''} onChange={handleEditChange} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Email *</label>
-                  <input type="email" name="email" value={editData.email || ''} onChange={handleEditChange} style={inputStyle} />
-                </div>
-
-                <div style={{ gridColumn: '1 / -1', marginTop: '8px' }}>
-                  <h3 style={{ fontSize: '16px', color: '#1a56db', marginBottom: '12px', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px' }}>
-                    👨‍👩‍👦 Parent/Guardian Information
-                  </h3>
-                </div>
-
-                <div>
-                  <label style={labelStyle}>Father's Name</label>
-                  <input type="text" name="father_name" value={editData.father_name || ''} onChange={handleEditChange} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Father's Occupation</label>
-                  <input type="text" name="father_occupation" value={editData.father_occupation || ''} onChange={handleEditChange} style={inputStyle} />
-                </div>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={labelStyle}>Father's Contact</label>
-                  <input type="text" name="father_contact" value={editData.father_contact || ''} onChange={handleEditChange} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Mother's Name</label>
-                  <input type="text" name="mother_name" value={editData.mother_name || ''} onChange={handleEditChange} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Mother's Occupation</label>
-                  <input type="text" name="mother_occupation" value={editData.mother_occupation || ''} onChange={handleEditChange} style={inputStyle} />
-                </div>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={labelStyle}>Mother's Contact</label>
-                  <input type="text" name="mother_contact" value={editData.mother_contact || ''} onChange={handleEditChange} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Guardian's Name</label>
-                  <input type="text" name="guardian_name" value={editData.guardian_name || ''} onChange={handleEditChange} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Guardian's Contact</label>
-                  <input type="text" name="guardian_contact" value={editData.guardian_contact || ''} onChange={handleEditChange} style={inputStyle} />
-                </div>
-
-                <div style={{ gridColumn: '1 / -1', marginTop: '8px' }}>
-                  <h3 style={{ fontSize: '16px', color: '#1a56db', marginBottom: '12px', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px' }}>
-                    📄 Application Details
-                  </h3>
-                </div>
-
-                <div>
-                  <label style={labelStyle}>Academic Year</label>
-                  <input type="text" name="academic_year" value={editData.academic_year || ''} onChange={handleEditChange} style={inputStyle} />
-                </div>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={labelStyle}>Registrar Remarks</label>
-                  <textarea name="registrar_remarks" value={editData.registrar_remarks || ''} onChange={handleEditChange} style={{ ...inputStyle, minHeight: '80px' }} placeholder="Enter remarks..." />
-                </div>
-              </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>No data found.</div>
-            )}
-
-            {!editLoading && editData && (
-              <div style={{ marginTop: '24px', borderTop: '2px solid #e5e7eb', paddingTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                <button onClick={() => { setShowEditModal(false); setEditData(null); setEditMessage(''); }}
-                  style={{
-                    background: '#6b7280', color: 'white', border: 'none',
-                    padding: '10px 24px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px'
-                  }}>Cancel</button>
-                <button onClick={handleSaveEdit} disabled={saving}
-                  style={{
-                    background: saving ? '#9ca3af' : '#1a56db',
-                    color: 'white', border: 'none', padding: '10px 24px',
-                    borderRadius: '8px', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '14px'
-                  }}>{saving ? '💾 Saving...' : '💾 Save Changes'}</button>
-              </div>
-            )}
           </div>
         </div>
       )}

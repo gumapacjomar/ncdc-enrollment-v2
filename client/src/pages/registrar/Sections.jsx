@@ -7,6 +7,7 @@ const Sections = () => {
     const navigate = useNavigate();
     const [sections, setSections] = useState([]);
     const [enrollments, setEnrollments] = useState([]);
+    const [teachers, setTeachers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [showViewModal, setShowViewModal] = useState(false);
@@ -19,6 +20,7 @@ const Sections = () => {
     const [formData, setFormData] = useState({
         section_name: '',
         grade_level: '',
+        adviser_id: '',
         school_year: '2026-2027',
         max_students: 40,
         status: 'active'
@@ -55,6 +57,7 @@ const Sections = () => {
     useEffect(() => {
         fetchData();
         fetchEnrollments();
+        fetchTeachers();
     }, []);
 
     const fetchData = async () => {
@@ -79,8 +82,15 @@ const Sections = () => {
         }
     };
 
-    // ✅ FIX: Only show CURRENTLY ENROLLED students (status='enrolled')
-    // Excludes passed/failed/graduated/dropped/transferred
+    const fetchTeachers = async () => {
+        try {
+            const res = await API.get('/admin/registrars');
+            setTeachers(Array.isArray(res.data) ? res.data : []);
+        } catch (err) {
+            console.error('Fetch teachers error:', err);
+        }
+    };
+
     const getStudentsInSection = (sectionId) => {
         if (!sectionId) return [];
         return enrollments.filter(e => {
@@ -100,6 +110,7 @@ const Sections = () => {
         setFormData({
             section_name: '',
             grade_level: '',
+            adviser_id: '',
             school_year: '2026-2027',
             max_students: 40,
             status: 'active'
@@ -114,6 +125,7 @@ const Sections = () => {
         setFormData({
             section_name: item.section_name || '',
             grade_level: item.grade_level || '',
+            adviser_id: item.adviser_id || '',
             school_year: item.school_year || '2026-2027',
             max_students: item.max_students || 40,
             status: item.status || 'active'
@@ -136,6 +148,7 @@ const Sections = () => {
             setMessage({ type: '', text: '' });
             const payload = {
                 ...formData,
+                adviser_id: formData.adviser_id ? parseInt(formData.adviser_id) : null,
                 max_students: parseInt(formData.max_students) || 40
             };
             if (editingItem) {
@@ -171,14 +184,18 @@ const Sections = () => {
         ? sections.filter(s => s.grade_level === filterGrade)
         : sections;
 
+    // ✅ UPDATED: Added Honor Students menu
     const menuItems = [
         { id: 'applications', icon: '📋', label: 'Applications', type: 'link', path: '/registrar/dashboard' },
         { id: 'enrolled', icon: '🎓', label: 'Enrolled Students', type: 'link', path: '/registrar/dashboard' },
         { id: 'sections', icon: '🏫', label: 'Sections', type: 'link', path: '/registrar/sections' },
         { id: 'subjects', icon: '📚', label: 'Subjects', type: 'link', path: '/registrar/subjects' },
         { id: 'enrollments', icon: '📝', label: 'Enrollments', type: 'link', path: '/registrar/enrollments' },
+        { id: 'reenrollment', icon: '🔄', label: 'Re-enrollment', type: 'link', path: '/registrar/re-enrollment-requests' },
         { id: 'grades', icon: '📊', label: 'Grades', type: 'link', path: '/registrar/grades' },
         { id: 'remarks', icon: '💬', label: 'Remarks', type: 'link', path: '/registrar/remarks' },
+        { id: 'honor-students', icon: '🏆', label: 'Honor Students', type: 'link', path: '/registrar/honor-students' },
+        { id: 'student-history', icon: '📚', label: 'Student History', type: 'link', path: '/registrar/student-history' },
         { id: 'settings', icon: '⚙️', label: 'Settings', type: 'link', path: '/registrar/dashboard' }
     ];
 
@@ -237,7 +254,7 @@ const Sections = () => {
                         <div>
                             <span style={{ fontSize: '18px', fontWeight: '800', color: '#1f2937' }}>NCDC</span>
                             <br />
-                            <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Registrar Panel</span>
+                            <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Teacher Panel</span>
                         </div>
                     </div>
                 </div>
@@ -261,14 +278,14 @@ const Sections = () => {
                         {profilePic ? (
                             <img src={profilePic} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : (
-                            user?.username?.charAt(0).toUpperCase() || 'R'
+                            user?.username?.charAt(0).toUpperCase() || 'T'
                         )}
                     </div>
                     <div>
                         <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
-                            {user?.username || 'Registrar'}
+                            {user?.username || 'Teacher'}
                         </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>Registrar</div>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>Teacher / Staff</div>
                     </div>
                 </Link>
 
@@ -421,11 +438,10 @@ const Sections = () => {
                         No sections found. Click "Add Section" to create one.
                     </div>
                 ) : (
-                    // ✅ SINGLE COLUMN LAYOUT
                     <div style={{
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '12px'
+                        gap: '8px'
                     }}>
                         {filtered.map(item => {
                             const studentCount = getStudentsInSection(item.id).length;
@@ -435,95 +451,110 @@ const Sections = () => {
                                     onClick={() => handleViewSection(item)}
                                     style={{
                                         background: 'white',
-                                        padding: '16px 20px',
-                                        borderRadius: '12px',
+                                        padding: '10px 14px',
+                                        borderRadius: '10px',
                                         border: '1px solid #e5e7eb',
-                                        boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
+                                        boxShadow: '0 1px 4px rgba(0,0,0,0.03)',
                                         borderLeft: '4px solid #1a56db',
                                         transition: 'all 0.2s ease',
                                         cursor: 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: '20px',
-                                        flexWrap: 'wrap'
+                                        gap: '12px',
+                                        flexWrap: 'nowrap',
+                                        overflow: 'hidden'
                                     }}
                                     onMouseEnter={(e) => {
-                                        e.currentTarget.style.transform = 'translateX(4px)';
-                                        e.currentTarget.style.boxShadow = '0 4px 15px rgba(26,86,219,0.1)';
+                                        e.currentTarget.style.transform = 'translateX(3px)';
+                                        e.currentTarget.style.boxShadow = '0 3px 10px rgba(26,86,219,0.1)';
                                         e.currentTarget.style.borderLeftColor = '#3b82f6';
                                     }}
                                     onMouseLeave={(e) => {
                                         e.currentTarget.style.transform = 'translateX(0)';
-                                        e.currentTarget.style.boxShadow = '0 2px 6px rgba(0,0,0,0.03)';
+                                        e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.03)';
                                         e.currentTarget.style.borderLeftColor = '#1a56db';
                                     }}
                                 >
-                                    <div style={{ minWidth: '180px', flex: '0 0 auto' }}>
-                                        <h3 style={{ margin: '0 0 4px', color: '#1f2937', fontSize: '17px', fontWeight: '700' }}>
+                                    <div style={{ 
+                                        minWidth: '150px', flex: '0 0 auto',
+                                        display: 'flex', alignItems: 'center', gap: '8px'
+                                    }}>
+                                        <h3 style={{ 
+                                            margin: 0, color: '#1f2937', 
+                                            fontSize: '14px', fontWeight: '700',
+                                            whiteSpace: 'nowrap'
+                                        }}>
                                             {item.section_name}
                                         </h3>
                                         <span style={{
-                                            display: 'inline-block', padding: '2px 10px',
+                                            display: 'inline-block', padding: '1px 8px',
                                             background: '#dbeafe', color: '#1a56db',
-                                            borderRadius: '10px', fontSize: '11px', fontWeight: '600'
+                                            borderRadius: '8px', fontSize: '10px', fontWeight: '600',
+                                            whiteSpace: 'nowrap'
                                         }}>
                                             {item.grade_level}
                                         </span>
                                     </div>
 
-                                    <div style={{ minWidth: '130px', flex: '1 1 auto' }}>
-                                        <div style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '500' }}>School Year</div>
-                                        <div style={{ fontSize: '14px', color: '#374151', fontWeight: '600' }}>
+                                    <div style={{ minWidth: '90px', flex: '0 0 auto' }}>
+                                        <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '500', lineHeight: '1.2' }}>SY</div>
+                                        <div style={{ fontSize: '12px', color: '#374151', fontWeight: '600', lineHeight: '1.3' }}>
                                             {item.school_year || 'N/A'}
                                         </div>
                                     </div>
 
-                                    <div style={{ minWidth: '100px', flex: '1 1 auto' }}>
-                                        <div style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '500' }}>Students</div>
-                                        <div style={{ fontSize: '14px', color: '#374151', fontWeight: '600' }}>
-                                            {studentCount} / {item.max_students || 40}
+                                    <div style={{ minWidth: '60px', flex: '0 0 auto' }}>
+                                        <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '500', lineHeight: '1.2' }}>Students</div>
+                                        <div style={{ fontSize: '12px', color: '#374151', fontWeight: '600', lineHeight: '1.3' }}>
+                                            {studentCount}/{item.max_students || 40}
                                         </div>
                                     </div>
 
-                                    {item.adviser_first_name && (
-                                        <div style={{ minWidth: '140px', flex: '1 1 auto' }}>
-                                            <div style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '500' }}>Adviser</div>
-                                            <div style={{ fontSize: '14px', color: '#374151', fontWeight: '600' }}>
-                                                {item.adviser_first_name} {item.adviser_last_name}
-                                            </div>
+                                    <div style={{ minWidth: '140px', flex: '1 1 auto', overflow: 'hidden' }}>
+                                        <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '500', lineHeight: '1.2' }}>Adviser</div>
+                                        <div style={{ 
+                                            fontSize: '12px', color: '#374151', fontWeight: '600', 
+                                            lineHeight: '1.3', whiteSpace: 'nowrap', 
+                                            overflow: 'hidden', textOverflow: 'ellipsis'
+                                        }}>
+                                            {item.adviser_first_name 
+                                                ? `${item.adviser_first_name} ${item.adviser_last_name || ''}`
+                                                : <span style={{ color: '#f59e0b', fontStyle: 'italic', fontWeight: '500' }}>⚠️ No adviser</span>
+                                            }
                                         </div>
-                                    )}
+                                    </div>
 
                                     <div style={{ flex: '0 0 auto' }}>
                                         <span style={{
-                                            padding: '4px 12px', borderRadius: '12px',
-                                            fontSize: '11px', fontWeight: '600',
+                                            padding: '2px 10px', borderRadius: '10px',
+                                            fontSize: '10px', fontWeight: '600',
                                             background: item.status === 'active' ? '#d1fae5' : '#fee2e2',
-                                            color: item.status === 'active' ? '#065f46' : '#991b1b'
+                                            color: item.status === 'active' ? '#065f46' : '#991b1b',
+                                            textTransform: 'uppercase'
                                         }}>
                                             {item.status || 'active'}
                                         </span>
                                     </div>
 
-                                    <div style={{ display: 'flex', gap: '6px', flex: '0 0 auto', marginLeft: 'auto' }}>
+                                    <div style={{ display: 'flex', gap: '5px', flex: '0 0 auto', marginLeft: 'auto' }}>
                                         <button
                                             onClick={(e) => handleEdit(item, e)}
                                             style={{
-                                                padding: '6px 14px',
+                                                padding: '5px 10px',
                                                 background: 'linear-gradient(135deg, #f59e0b, #fbbf24)',
-                                                color: 'white', border: 'none', borderRadius: '6px',
-                                                fontWeight: '600', cursor: 'pointer', fontSize: '12px'
+                                                color: 'white', border: 'none', borderRadius: '5px',
+                                                fontWeight: '600', cursor: 'pointer', fontSize: '11px'
                                             }}
-                                        >✏️ Edit</button>
+                                        >✏️</button>
                                         <button
                                             onClick={(e) => handleDelete(item.id, item.section_name, e)}
                                             style={{
-                                                padding: '6px 14px',
+                                                padding: '5px 10px',
                                                 background: 'linear-gradient(135deg, #ef4444, #f87171)',
-                                                color: 'white', border: 'none', borderRadius: '6px',
-                                                fontWeight: '600', cursor: 'pointer', fontSize: '12px'
+                                                color: 'white', border: 'none', borderRadius: '5px',
+                                                fontWeight: '600', cursor: 'pointer', fontSize: '11px'
                                             }}
-                                        >🗑️ Delete</button>
+                                        >🗑️</button>
                                     </div>
                                 </div>
                             );
@@ -597,6 +628,25 @@ const Sections = () => {
                                 <option value="">-- Select Grade --</option>
                                 {gradeLevels.map(g => <option key={g} value={g}>{g}</option>)}
                             </select>
+                        </div>
+
+                        <div style={{ marginBottom: '15px' }}>
+                            <label style={labelStyle}>Adviser (Teacher)</label>
+                            <select
+                                value={formData.adviser_id}
+                                onChange={(e) => setFormData({ ...formData, adviser_id: e.target.value })}
+                                style={inputStyle}
+                            >
+                                <option value="">-- No Adviser --</option>
+                                {teachers.map(t => (
+                                    <option key={t.id} value={t.id}>
+                                        {t.first_name} {t.last_name} ({t.employee_id})
+                                    </option>
+                                ))}
+                            </select>
+                            <small style={{ color: '#6b7280', fontSize: '12px' }}>
+                                Every section should have an assigned adviser
+                            </small>
                         </div>
 
                         <div style={{ marginBottom: '15px' }}>

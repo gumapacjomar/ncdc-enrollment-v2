@@ -144,7 +144,7 @@ const AllApplications = () => {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <span style={{ fontSize: '14px', color: '#374151' }}>
-            👋 {JSON.parse(localStorage.getItem('user'))?.username || 'Admin'}
+            👋 {JSON.parse(localStorage.getItem('user'))?.username || 'Principal'}
           </span>
           <button
             onClick={() => {
@@ -265,7 +265,7 @@ const AllApplications = () => {
                     <th style={{ padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#374151' }}>Contact</th>
                     <th style={{ padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#374151' }}>Status</th>
                     <th style={{ padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#374151' }}>Date</th>
-                    <th style={{ padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#374151' }}>Registrar</th>
+                    <th style={{ padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#374151' }}>Teacher</th>
                     <th style={{ padding: '12px', textAlign: 'center', fontSize: '13px', fontWeight: '600', color: '#374151' }}>Actions</th>
                   </tr>
                 </thead>
@@ -291,7 +291,7 @@ const AllApplications = () => {
                         {new Date(app.created_at).toLocaleDateString()}
                       </td>
                       <td style={{ padding: '12px', fontSize: '14px', color: '#6b7280' }}>
-                        {app.registrar_name || 'N/A'}
+                        {app.teacher_name || app.registrar_name || 'N/A'}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'center' }}>
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
@@ -438,10 +438,10 @@ const AllApplications = () => {
                         </span>
                       </p>
                       <p><strong>Date Applied:</strong> {selectedStudent.created_at ? new Date(selectedStudent.created_at).toLocaleDateString() : 'N/A'}</p>
-                      <p><strong>Registrar:</strong> {selectedStudent.registrar_first_name || 'N/A'} {selectedStudent.registrar_last_name || ''}</p>
-                      <p><strong>Registrar Remarks:</strong> {selectedStudent.registrar_remarks || 'N/A'}</p>
-                      <p><strong>Admin:</strong> {selectedStudent.admin_first_name || 'N/A'} {selectedStudent.admin_last_name || ''}</p>
-                      <p><strong>Admin Remarks:</strong> {selectedStudent.admin_remarks || 'N/A'}</p>
+                      <p><strong>Teacher:</strong> {selectedStudent.registrar_first_name || 'N/A'} {selectedStudent.registrar_last_name || ''}</p>
+                      <p><strong>Teacher Remarks:</strong> {selectedStudent.registrar_remarks || 'N/A'}</p>
+                      <p><strong>Principal:</strong> {selectedStudent.admin_first_name || 'N/A'} {selectedStudent.admin_last_name || ''}</p>
+                      <p><strong>Principal Remarks:</strong> {selectedStudent.admin_remarks || 'N/A'}</p>
                     </div>
 
                     <h3 style={{ fontSize: '16px', color: '#1a56db', marginTop: '16px', marginBottom: '12px' }}>📎 Requirements</h3>

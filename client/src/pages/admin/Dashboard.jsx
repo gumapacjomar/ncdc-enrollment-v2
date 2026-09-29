@@ -120,7 +120,7 @@ const AdminDashboard = () => {
       
       const response = await API.post(`/admin/confirm/${applicationId}`, {
         adminId: user.id,
-        remarks: remarks || 'Confirmed by Admin'
+        remarks: remarks || 'Confirmed by Principal'
       });
       
       setModalMessage({ type: 'success', text: response.data.message });
@@ -167,10 +167,10 @@ const AdminDashboard = () => {
       
       await API.put(`/admin/reject/${applicationId}`, {
         adminId: user.id,
-        remarks: reason || 'Rejected by Admin'
+        remarks: reason || 'Rejected by Principal'
       });
       
-      setModalMessage({ type: 'success', text: '✅ Application rejected and returned to registrar' });
+      setModalMessage({ type: 'success', text: '✅ Application rejected and returned to teacher' });
       
       setTimeout(() => {
         setShowModal(false);
@@ -286,7 +286,7 @@ const AdminDashboard = () => {
             <div>
               <span style={{ fontSize: '20px', fontWeight: '800', color: '#1f2937' }}>NCDC</span>
               <br />
-              <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Admin Panel</span>
+              <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Principal Panel</span>
             </div>
           </div>
         </div>
@@ -328,15 +328,15 @@ const AdminDashboard = () => {
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
             ) : (
-              user?.username?.charAt(0).toUpperCase() || 'A'
+              user?.username?.charAt(0).toUpperCase() || 'P'
             )}
           </div>
           <div>
             <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
-              {user?.username || 'Admin'}
+              {user?.username || 'Principal'}
             </div>
             <div style={{ fontSize: '12px', color: '#6b7280' }}>
-              Administrator
+              Principal
             </div>
           </div>
         </Link>
@@ -473,7 +473,7 @@ const AdminDashboard = () => {
         }}>
           <div>
             <h1 style={{ fontSize: '28px', color: '#1f2937', margin: 0, fontWeight: '800', letterSpacing: '-0.5px' }}>
-              Admin Dashboard
+              Principal Dashboard
             </h1>
             <p style={{ color: '#6b7280', margin: '4px 0 0', fontSize: '15px' }}>
               Welcome back! Oversee and manage the enrollment process.
@@ -618,7 +618,7 @@ const AdminDashboard = () => {
                 ✅ Applications for Confirmation
               </h2>
               <p style={{ fontSize: '13px', color: '#6b7280', margin: '4px 0 0' }}>
-                Applications approved by registrar, awaiting final confirmation.
+                Applications approved by teacher, awaiting final confirmation.
               </p>
             </div>
             <Link to="/admin/approved" style={{
@@ -929,11 +929,11 @@ const AdminDashboard = () => {
 
                 {/* Registrar Info */}
                 <div style={{ marginBottom: '16px' }}>
-                  <h3 style={{ fontSize: '16px', color: '#1a56db', marginBottom: '8px' }}>📝 Registrar Review</h3>
+                  <h3 style={{ fontSize: '16px', color: '#1a56db', marginBottom: '8px' }}>📝 Teacher Review</h3>
                   <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px' }}>
-                    <p style={{ margin: '2px 0', fontSize: '14px' }}><strong>Registrar:</strong> {selectedApp.registrar_first_name || 'N/A'} {selectedApp.registrar_last_name || ''}</p>
-                    <p style={{ margin: '2px 0', fontSize: '14px' }}><strong>Registrar Remarks:</strong> {selectedApp.registrar_remarks || 'N/A'}</p>
-                    <p style={{ margin: '2px 0', fontSize: '14px' }}><strong>Registrar Action Date:</strong> {selectedApp.registrar_action_date ? new Date(selectedApp.registrar_action_date).toLocaleString() : 'N/A'}</p>
+                    <p style={{ margin: '2px 0', fontSize: '14px' }}><strong>Teacher:</strong> {selectedApp.registrar_first_name || 'N/A'} {selectedApp.registrar_last_name || ''}</p>
+                    <p style={{ margin: '2px 0', fontSize: '14px' }}><strong>Teacher Remarks:</strong> {selectedApp.registrar_remarks || 'N/A'}</p>
+                    <p style={{ margin: '2px 0', fontSize: '14px' }}><strong>Teacher Action Date:</strong> {selectedApp.registrar_action_date ? new Date(selectedApp.registrar_action_date).toLocaleString() : 'N/A'}</p>
                   </div>
                 </div>
 

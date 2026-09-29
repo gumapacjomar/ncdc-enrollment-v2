@@ -47,7 +47,7 @@ const ConfirmEnrollment = () => {
       const user = JSON.parse(localStorage.getItem('user'));
       const response = await API.post(`/admin/confirm/${id}`, {
         adminId: user.id,
-        remarks: remarks || 'Confirmed by Admin'
+        remarks: remarks || 'Confirmed by Principal'
       });
       
       setMessage({ type: 'success', text: response.data.message });
@@ -78,10 +78,10 @@ const ConfirmEnrollment = () => {
       const user = JSON.parse(localStorage.getItem('user'));
       await API.put(`/admin/reject/${id}`, {
         adminId: user.id,
-        remarks: reason || 'Rejected by Admin'
+        remarks: reason || 'Rejected by Principal'
       });
       
-      setMessage({ type: 'success', text: 'Application rejected and returned to registrar' });
+      setMessage({ type: 'success', text: 'Application rejected and returned to teacher' });
       
       setTimeout(() => {
         navigate('/admin/dashboard');

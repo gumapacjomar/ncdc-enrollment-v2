@@ -12,7 +12,6 @@ const Remarks = () => {
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState({ type: '', text: '' });
 
-    // Student search
     const [searchTerm, setSearchTerm] = useState('');
     const [showResults, setShowResults] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState(null);
@@ -63,19 +62,16 @@ const Remarks = () => {
         fetchStudents();
     }, []);
 
-    // Fetch unique students from enrollments (deduplicated by student_id)
     const fetchStudents = async () => {
         try {
             const res = await API.get('/registrar/enrollments');
             const enrollments = Array.isArray(res.data) ? res.data : [];
 
-            // Dedupe by student_id — get latest enrollment per student
             const uniqueStudentsMap = new Map();
             enrollments.forEach(e => {
                 if (!uniqueStudentsMap.has(e.student_id)) {
                     uniqueStudentsMap.set(e.student_id, e);
                 } else {
-                    // Keep latest enrollment (by school_year or id)
                     const existing = uniqueStudentsMap.get(e.student_id);
                     if ((e.school_year || '') > (existing.school_year || '')) {
                         uniqueStudentsMap.set(e.student_id, e);
@@ -104,7 +100,6 @@ const Remarks = () => {
         }
     };
 
-    // Filter students by search
     const filteredStudents = students.filter(s => {
         if (!searchTerm.trim()) return true;
         const search = searchTerm.toLowerCase();
@@ -185,6 +180,7 @@ const Remarks = () => {
         }
     };
 
+    // ✅ UPDATED: Added Honor Students menu
     const menuItems = [
         { id: 'applications', icon: '📋', label: 'Applications', type: 'link', path: '/registrar/dashboard' },
         { id: 'enrolled', icon: '🎓', label: 'Enrolled Students', type: 'link', path: '/registrar/dashboard' },
@@ -193,6 +189,8 @@ const Remarks = () => {
         { id: 'enrollments', icon: '📝', label: 'Enrollments', type: 'link', path: '/registrar/enrollments' },
         { id: 'grades', icon: '📊', label: 'Grades', type: 'link', path: '/registrar/grades' },
         { id: 'remarks', icon: '💬', label: 'Remarks', type: 'link', path: '/registrar/remarks' },
+        { id: 'honor-students', icon: '🏆', label: 'Honor Students', type: 'link', path: '/registrar/honor-students' },
+        { id: 'student-history', icon: '📚', label: 'Student History', type: 'link', path: '/registrar/student-history' },
         { id: 'settings', icon: '⚙️', label: 'Settings', type: 'link', path: '/registrar/dashboard' }
     ];
 
@@ -257,7 +255,7 @@ const Remarks = () => {
                         <div>
                             <span style={{ fontSize: '18px', fontWeight: '800', color: '#1f2937' }}>NCDC</span>
                             <br />
-                            <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Registrar Panel</span>
+                            <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Teacher Panel</span>
                         </div>
                     </div>
                 </div>
@@ -281,14 +279,14 @@ const Remarks = () => {
                         {profilePic ? (
                             <img src={profilePic} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : (
-                            user?.username?.charAt(0).toUpperCase() || 'R'
+                            user?.username?.charAt(0).toUpperCase() || 'T'
                         )}
                     </div>
                     <div>
                         <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
-                            {user?.username || 'Registrar'}
+                            {user?.username || 'Teacher'}
                         </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>Registrar</div>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>Teacher / Staff</div>
                     </div>
                 </Link>
 
@@ -406,7 +404,6 @@ const Remarks = () => {
                     }}>{message.text}</div>
                 )}
 
-                {/* Student Search */}
                 <div style={{
                     background: 'white', padding: '20px', borderRadius: '14px',
                     marginBottom: '24px', border: '1px solid #e5e7eb',
@@ -463,7 +460,6 @@ const Remarks = () => {
                         )}
                     </div>
 
-                    {/* Search Results */}
                     {showResults && searchTerm && !selectedStudent && (
                         <div style={{
                             position: 'absolute',
@@ -510,7 +506,6 @@ const Remarks = () => {
                     )}
                 </div>
 
-                {/* Click-away */}
                 {showResults && searchTerm && !selectedStudent && (
                     <div
                         onClick={() => setShowResults(false)}
@@ -523,7 +518,6 @@ const Remarks = () => {
                     />
                 )}
 
-                {/* Selected Student Info Card */}
                 {selectedStudent && (
                     <div style={{
                         background: 'linear-gradient(135deg, #1a56db, #3b82f6)',
@@ -562,7 +556,6 @@ const Remarks = () => {
                     </div>
                 )}
 
-                {/* Remarks List */}
                 {selectedStudent ? (
                     <div style={{
                         background: 'white', padding: '24px', borderRadius: '14px',
@@ -656,7 +649,6 @@ const Remarks = () => {
                 </div>
             </div>
 
-            {/* MODAL */}
             {showModal && (
                 <div style={{
                     position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',

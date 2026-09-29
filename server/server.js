@@ -161,7 +161,6 @@ const generateStudentId = () => {
 // API ROUTES
 // =============================================
 
-// Test Route
 app.get('/api/test', (req, res) => {
     res.json({ message: 'NCDC Enrollment System API is running!' });
 });
@@ -296,6 +295,145 @@ app.post('/api/apply', upload.fields([
         });
     } catch (error) {
         console.error('Application error:', error);
+        res.status(500).json({ error: 'Server error: ' + error.message });
+    }
+});
+
+// =============================================
+// 1b. REGISTRAR - Walk-in Application (Auto-Approve)
+// =============================================
+app.post('/api/registrar/apply-walkin', upload.fields([
+    { name: 'birthCertificate', maxCount: 1 },
+    { name: 'immunizationRecord', maxCount: 1 },
+    { name: 'medicalClearance', maxCount: 1 },
+    { name: 'idPicture', maxCount: 1 }
+]), async (req, res) => {
+    try {
+        const {
+            firstName, middleName, lastName, suffix,
+            birthDate, gender, address, contactNumber, email,
+            gradeLevel,
+            fatherName, fatherOccupation, fatherContact,
+            motherName, motherOccupation, motherContact,
+            guardianName, guardianContact,
+            academicYear,
+            registrarId
+        } = req.body;
+
+        const files = req.files || {};
+        const birthCertificate = files.birthCertificate ? files.birthCertificate[0].filename : null;
+        const immunizationRecord = files.immunizationRecord ? files.immunizationRecord[0].filename : null;
+        const medicalClearance = files.medicalClearance ? files.medicalClearance[0].filename : null;
+        const idPicture = files.idPicture ? files.idPicture[0].filename : null;
+
+        if (!firstName || !lastName || !birthDate || !gender || !address || !email) {
+            return res.status(400).json({ error: 'Please fill in all required fields' });
+        }
+
+        if (!gradeLevel) {
+            return res.status(400).json({ error: 'Grade level is required' });
+        }
+
+        const today = new Date();
+        const birth = new Date(birthDate);
+        let age = today.getFullYear() - birth.getFullYear();
+        const monthDiff = today.getMonth() - birth.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+            age--;
+        }
+        if (age < 5 || age > 25) {
+            return res.status(400).json({ error: `Invalid age: ${age} years old. Must be between 5 and 25 years old.` });
+        }
+
+        const emailCheckQuery = `SELECT id FROM students WHERE email = ?`;
+        db.query(emailCheckQuery, [email], (err, results) => {
+            if (err) {
+                return res.status(500).json({ error: err.message });
+            }
+            
+            if (results.length > 0) {
+                return res.status(400).json({ error: 'Email already registered' });
+            }
+
+            const username = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`.replace(/[^a-z0-9.]/g, '');
+            const defaultPassword = Math.random().toString(36).slice(-8);
+            
+            bcrypt.hash(defaultPassword, 10, (err, hashedPassword) => {
+                if (err) {
+                    return res.status(500).json({ error: 'Password hashing error: ' + err.message });
+                }
+
+                const studentQuery = `
+                    INSERT INTO students (
+                        first_name, middle_name, last_name, suffix,
+                        birth_date, gender, address, contact_number, email,
+                        username, password,
+                        father_name, father_occupation, father_contact,
+                        mother_name, mother_occupation, mother_contact,
+                        guardian_name, guardian_contact,
+                        current_grade_level,
+                        is_first_login
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `;
+
+                const studentValues = [
+                    firstName, middleName || null, lastName, suffix || null,
+                    birthDate, gender, address, contactNumber || null, email,
+                    username, hashedPassword,
+                    fatherName || null, fatherOccupation || null, fatherContact || null,
+                    motherName || null, motherOccupation || null, motherContact || null,
+                    guardianName || null, guardianContact || null,
+                    gradeLevel || null,
+                    true
+                ];
+
+                db.query(studentQuery, studentValues, (err, result) => {
+                    if (err) {
+                        return res.status(500).json({ error: 'Student insert error: ' + err.message });
+                    }
+
+                    const studentId = result.insertId;
+
+                    const appQuery = `
+                        INSERT INTO applications (
+                            student_id, academic_year,
+                            birth_certificate, immunization_record, medical_clearance, id_picture,
+                            status, registrar_id, registrar_remarks, registrar_action_date
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                    `;
+
+                    const appValues = [
+                        studentId,
+                        academicYear || '2026-2027',
+                        birthCertificate,
+                        immunizationRecord,
+                        medicalClearance,
+                        idPicture,
+                        'approved',
+                        registrarId || null,
+                        'Walk-in application (auto-approved by teacher)'
+                    ];
+
+                    db.query(appQuery, appValues, (err) => {
+                        if (err) {
+                            return res.status(500).json({ error: 'Application insert error: ' + err.message });
+                        }
+
+                        console.log('✅ Walk-in application created (auto-approved):', studentId);
+
+                        res.status(201).json({
+                            success: true,
+                            message: 'Walk-in application created and auto-approved! Sent to principal for final confirmation.',
+                            studentId: studentId,
+                            username: username,
+                            password: defaultPassword
+                        });
+                    });
+                });
+            });
+        });
+    } catch (error) {
+        console.error('Walk-in application error:', error);
         res.status(500).json({ error: 'Server error: ' + error.message });
     }
 });
@@ -2056,7 +2194,6 @@ app.post('/api/registrar/enrollments', (req, res) => {
                 );
             }
 
-            // ✅ AUTO-UPDATE: Update students.current_grade_level + current_section
             const sectionSubquery = section_id
                 ? `(SELECT section_name FROM sections WHERE id = ${parseInt(section_id)})`
                 : 'NULL';
@@ -2117,7 +2254,6 @@ app.put('/api/registrar/enrollments/:id', (req, res) => {
         ], (err) => {
             if (err) return res.status(500).json({ error: err.message });
 
-            // ✅ AUTO-UPDATE: Kung status = 'enrolled', i-update ang students.current_grade_level
             if (status === 'enrolled') {
                 const sectionSubquery = section_id
                     ? `(SELECT section_name FROM sections WHERE id = ${parseInt(section_id)})`
@@ -2180,7 +2316,6 @@ app.delete('/api/registrar/enrollments/:id', (req, res) => {
 app.get('/api/registrar/enrollment-eligibility/:studentId', (req, res) => {
     const { studentId } = req.params;
 
-    // Step 1: Get student info
     const studentQuery = `SELECT id, student_id, first_name, middle_name, last_name, current_grade_level, enrollment_status FROM students WHERE id = ?`;
     
     db.query(studentQuery, [studentId], (err, studentResults) => {
@@ -2191,7 +2326,6 @@ app.get('/api/registrar/enrollment-eligibility/:studentId', (req, res) => {
 
         const student = studentResults[0];
 
-        // Step 2: Get all enrollments ordered by school year
         const enrollQuery = `
             SELECT e.id, e.grade_level, e.school_year, e.semester, e.status, e.completed_at,
                    sec.section_name
@@ -2204,10 +2338,8 @@ app.get('/api/registrar/enrollment-eligibility/:studentId', (req, res) => {
         db.query(enrollQuery, [studentId], (err, enrollments) => {
             if (err) return res.status(500).json({ error: err.message });
 
-            // Step 3: Get the latest enrollment (current/most recent)
             const latestEnrollment = enrollments.length > 0 ? enrollments[0] : null;
 
-            // Step 4: If no enrollment, return "new student" status
             if (!latestEnrollment) {
                 return res.json({
                     student: student,
@@ -2221,7 +2353,6 @@ app.get('/api/registrar/enrollment-eligibility/:studentId', (req, res) => {
                 });
             }
 
-            // Step 5: Get grades for the latest enrollment
             const gradesQuery = `
                 SELECT id, subject, grade, quarter, remarks
                 FROM grades
@@ -2232,14 +2363,12 @@ app.get('/api/registrar/enrollment-eligibility/:studentId', (req, res) => {
             db.query(gradesQuery, [latestEnrollment.id], (err, grades) => {
                 if (err) return res.status(500).json({ error: err.message });
 
-                // Step 6: Calculate average
                 let average = 0;
                 if (grades.length > 0) {
                     const sum = grades.reduce((acc, g) => acc + parseFloat(g.grade || 0), 0);
                     average = parseFloat((sum / grades.length).toFixed(2));
                 }
 
-                // Step 7: Determine eligibility
                 const gradeLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
                 const currentIdx = gradeLevels.indexOf(latestEnrollment.grade_level);
                 const isGrade6 = latestEnrollment.grade_level === 'Grade 6';
@@ -2249,7 +2378,6 @@ app.get('/api/registrar/enrollment-eligibility/:studentId', (req, res) => {
                 let suggestedAction = 'ENROLL';
                 let message = '';
 
-                // Priority 1: Check enrollment status first (manual override)
                 if (latestEnrollment.status === 'passed') {
                     if (isGrade6) {
                         eligibility = 'GRADUATED';
@@ -2264,7 +2392,7 @@ app.get('/api/registrar/enrollment-eligibility/:studentId', (req, res) => {
                     }
                 } else if (latestEnrollment.status === 'failed') {
                     eligibility = 'RETAINED';
-                    nextGradeLevel = latestEnrollment.grade_level; // same grade
+                    nextGradeLevel = latestEnrollment.grade_level;
                     suggestedAction = 'ENROLL';
                     message = `⚠️ Failed sa ${latestEnrollment.grade_level} — kailangan i-retain (same grade) o i-review.`;
                 } else if (latestEnrollment.status === 'enrolled') {
@@ -2283,7 +2411,6 @@ app.get('/api/registrar/enrollment-eligibility/:studentId', (req, res) => {
                     suggestedAction = 'GRADUATE';
                     message = '🎓 Graduated na siya. Dili na ma-enroll.';
                 } else {
-                    // Fallback: base sa average grades
                     if (average >= 75) {
                         eligibility = 'ELIGIBLE';
                         nextGradeLevel = isGrade6 ? null : gradeLevels[currentIdx + 1];
@@ -2309,6 +2436,353 @@ app.get('/api/registrar/enrollment-eligibility/:studentId', (req, res) => {
                 });
             });
         });
+    });
+});
+
+// =============================================
+// 48c. ADMIN - Graduate Student (Grade 6 only)
+// =============================================
+app.post('/api/admin/graduate-student/:studentId', (req, res) => {
+    const { studentId } = req.params;
+    const { adminId, remarks } = req.body;
+
+    const studentQuery = `
+        SELECT s.id, s.student_id, s.first_name, s.last_name, s.current_grade_level, s.enrollment_status
+        FROM students s
+        WHERE s.id = ?
+    `;
+
+    db.query(studentQuery, [studentId], (err, studentResults) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (studentResults.length === 0) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+
+        const student = studentResults[0];
+
+        if (student.current_grade_level !== 'Grade 6') {
+            return res.status(400).json({ 
+                error: `Dili pwede i-graduate ang ${student.current_grade_level} student. Grade 6 lang ang ma-graduate.` 
+            });
+        }
+
+        const enrollQuery = `
+            SELECT id, grade_level, school_year, status
+            FROM student_enrollments
+            WHERE student_id = ? AND grade_level = 'Grade 6'
+            ORDER BY school_year DESC
+            LIMIT 1
+        `;
+
+        db.query(enrollQuery, [studentId], (err, enrollResults) => {
+            if (err) return res.status(500).json({ error: err.message });
+            
+            if (enrollResults.length === 0) {
+                return res.status(400).json({ error: 'Walay Grade 6 enrollment record ang student.' });
+            }
+
+            const enrollment = enrollResults[0];
+
+            if (enrollment.status !== 'passed') {
+                return res.status(400).json({ 
+                    error: `Dili pa pwede i-graduate. Grade 6 status: ${enrollment.status}. Kinahanglan i-mark as 'passed' una.` 
+                });
+            }
+
+            const gradesQuery = `
+                SELECT AVG(grade) as average, COUNT(*) as total
+                FROM grades
+                WHERE enrollment_id = ?
+            `;
+
+            db.query(gradesQuery, [enrollment.id], (err, gradeResults) => {
+                if (err) return res.status(500).json({ error: err.message });
+
+                const average = parseFloat(gradeResults[0].average || 0);
+                const totalSubjects = gradeResults[0].total || 0;
+
+                if (totalSubjects === 0) {
+                    return res.status(400).json({ error: 'Walay grades record. Kinahanglan naay grades una.' });
+                }
+
+                if (average < 75) {
+                    return res.status(400).json({ 
+                        error: `Average ${average.toFixed(2)} (<75). Dili pwede i-graduate.` 
+                    });
+                }
+
+                const updateQuery = `
+                    UPDATE students 
+                    SET enrollment_status = 'graduated',
+                        date_enrolled = COALESCE(date_enrolled, NOW())
+                    WHERE id = ?
+                `;
+
+                db.query(updateQuery, [studentId], (err) => {
+                    if (err) return res.status(500).json({ error: err.message });
+
+                    db.query(
+                        `UPDATE student_enrollments SET status = 'graduated', completed_at = NOW() WHERE id = ?`,
+                        [enrollment.id],
+                        (err) => {
+                            if (err) console.error('Enrollment update error:', err);
+                        }
+                    );
+
+                    if (adminId) {
+                        db.query(
+                            `INSERT INTO student_remarks 
+                             (student_id, enrollment_id, remark_type, remark, created_by, created_by_role)
+                             VALUES (?, ?, 'achievement', ?, ?, 'admin')`,
+                            [studentId, enrollment.id, `🎓 Graduated — Average: ${average.toFixed(2)}${remarks ? `. ${remarks}` : ''}`, adminId],
+                            (err) => {
+                                if (err) console.error('Remark insert error:', err);
+                            }
+                        );
+                    }
+
+                    console.log(`🎓 Student graduated: ${student.first_name} ${student.last_name} (${student.student_id})`);
+
+                    res.json({
+                        success: true,
+                        message: `🎓 ${student.first_name} ${student.last_name} graduated successfully!`,
+                        data: {
+                            studentId: student.student_id,
+                            name: `${student.first_name} ${student.last_name}`,
+                            average: average.toFixed(2),
+                            totalSubjects: totalSubjects
+                        }
+                    });
+                });
+            });
+        });
+    });
+});
+
+// =============================================
+// 48d. RE-ENROLLMENT - Student Apply for Next Grade
+// =============================================
+app.post('/api/student/reenrollment/apply', (req, res) => {
+    const { student_id, current_enrollment_id, remarks } = req.body;
+
+    if (!student_id || !current_enrollment_id) {
+        return res.status(400).json({ error: 'Student ID and current enrollment are required' });
+    }
+
+    const enrollQuery = `
+        SELECT e.id, e.grade_level, e.school_year, e.status, e.section_id,
+               s.current_grade_level, s.first_name, s.last_name
+        FROM student_enrollments e
+        JOIN students s ON e.student_id = s.id
+        WHERE e.id = ? AND e.student_id = ?
+    `;
+
+    db.query(enrollQuery, [current_enrollment_id, student_id], (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (results.length === 0) {
+            return res.status(404).json({ error: 'Enrollment not found' });
+        }
+
+        const enrollment = results[0];
+
+        if (enrollment.status !== 'passed' && enrollment.status !== 'enrolled') {
+            return res.status(400).json({ 
+                error: `Dili pwede mag-apply. Current status: ${enrollment.status}. Kinahanglan 'passed' o 'enrolled'.` 
+            });
+        }
+
+        const checkQuery = `
+            SELECT id FROM reenrollment_requests
+            WHERE student_id = ? AND status = 'pending'
+        `;
+
+        db.query(checkQuery, [student_id], (err, checkResults) => {
+            if (err) return res.status(500).json({ error: err.message });
+            if (checkResults.length > 0) {
+                return res.status(400).json({ error: 'Naa nay pending re-enrollment request. Please wait for approval.' });
+            }
+
+            const gradesQuery = `
+                SELECT AVG(grade) as average
+                FROM grades
+                WHERE enrollment_id = ?
+            `;
+
+            db.query(gradesQuery, [current_enrollment_id], (err, gradeResults) => {
+                if (err) return res.status(500).json({ error: err.message });
+
+                const average = gradeResults[0].average ? parseFloat(gradeResults[0].average).toFixed(2) : null;
+
+                const gradeLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
+                const currentIdx = gradeLevels.indexOf(enrollment.grade_level);
+                const nextGrade = gradeLevels[currentIdx + 1] || null;
+
+                if (!nextGrade) {
+                    return res.status(400).json({ error: 'Grade 6 na — graduate na, dili na pwede mag-re-enroll.' });
+                }
+
+                const parts = enrollment.school_year.split('-');
+                const nextSY = parts.length === 2 
+                    ? `${parseInt(parts[0]) + 1}-${parseInt(parts[1]) + 1}`
+                    : enrollment.school_year;
+
+                const insertQuery = `
+                    INSERT INTO reenrollment_requests 
+                    (student_id, current_grade_level, next_grade_level, 
+                     current_school_year, next_school_year,
+                     current_enrollment_id, average_grade, remarks, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                `;
+
+                db.query(insertQuery, [
+                    student_id, enrollment.grade_level, nextGrade,
+                    enrollment.school_year, nextSY,
+                    current_enrollment_id, average, remarks || null
+                ], (err, result) => {
+                    if (err) return res.status(500).json({ error: err.message });
+
+                    console.log('✅ Re-enrollment request created:', result.insertId);
+                    res.status(201).json({
+                        success: true,
+                        message: `✅ Application submitted for ${nextGrade} (SY ${nextSY})! Wait for registrar approval.`,
+                        id: result.insertId,
+                        nextGrade: nextGrade,
+                        nextSchoolYear: nextSY,
+                        average: average
+                    });
+                });
+            });
+        });
+    });
+});
+
+// =============================================
+// 48e. RE-ENROLLMENT - Get Student's Requests
+// =============================================
+app.get('/api/student/reenrollment/:studentId', (req, res) => {
+    const { studentId } = req.params;
+
+    const query = `
+        SELECT r.*, 
+               reg.first_name AS registrar_first_name,
+               reg.last_name AS registrar_last_name
+        FROM reenrollment_requests r
+        LEFT JOIN registrars reg ON r.registrar_id = reg.id
+        WHERE r.student_id = ?
+        ORDER BY r.created_at DESC
+    `;
+
+    db.query(query, [studentId], (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(results);
+    });
+});
+
+// =============================================
+// 48f. RE-ENROLLMENT - Get All Pending Requests (Registrar)
+// =============================================
+app.get('/api/registrar/reenrollment/pending', (req, res) => {
+    const query = `
+        SELECT r.*,
+               s.student_id AS public_id,
+               s.first_name, s.middle_name, s.last_name,
+               s.current_grade_level AS student_current_grade,
+               s.current_section AS student_current_section
+        FROM reenrollment_requests r
+        JOIN students s ON r.student_id = s.id
+        WHERE r.status = 'pending'
+        ORDER BY r.created_at DESC
+    `;
+
+    db.query(query, (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(results);
+    });
+});
+
+// =============================================
+// 48g. RE-ENROLLMENT - Approve (Registrar/Admin)
+// =============================================
+app.post('/api/registrar/reenrollment/approve/:id', (req, res) => {
+    const { id } = req.params;
+    const { registrarId, remarks } = req.body;
+
+    const getQuery = `
+        SELECT * FROM reenrollment_requests WHERE id = ? AND status = 'pending'
+    `;
+
+    db.query(getQuery, [id], (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (results.length === 0) {
+            return res.status(404).json({ error: 'Request not found or already processed' });
+        }
+
+        const request = results[0];
+
+        const insertEnrollQuery = `
+            INSERT INTO student_enrollments 
+            (student_id, grade_level, section_id, school_year, semester, status, remarks)
+            VALUES (?, ?, NULL, ?, 'Full Year', 'enrolled', ?)
+        `;
+
+        db.query(insertEnrollQuery, [
+            request.student_id,
+            request.next_grade_level,
+            request.next_school_year,
+            `Auto-enrolled via re-enrollment request #${id}`
+        ], (err, enrollResult) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            db.query(
+                `UPDATE students SET current_grade_level = ?, enrollment_status = 'active' WHERE id = ?`,
+                [request.next_grade_level, request.student_id]
+            );
+
+            db.query(
+                `UPDATE reenrollment_requests 
+                 SET status = 'approved', registrar_id = ?, registrar_remarks = ?, action_date = NOW() 
+                 WHERE id = ?`,
+                [registrarId || null, remarks || 'Approved by Registrar', id],
+                (err) => {
+                    if (err) return res.status(500).json({ error: err.message });
+
+                    console.log('✅ Re-enrollment approved:', id);
+                    res.json({
+                        success: true,
+                        message: `✅ Approved! Student enrolled sa ${request.next_grade_level} (SY ${request.next_school_year}).`,
+                        enrollmentId: enrollResult.insertId
+                    });
+                }
+            );
+        });
+    });
+});
+
+// =============================================
+// 48h. RE-ENROLLMENT - Reject (Registrar/Admin)
+// =============================================
+app.post('/api/registrar/reenrollment/reject/:id', (req, res) => {
+    const { id } = req.params;
+    const { registrarId, remarks } = req.body;
+
+    if (!remarks) {
+        return res.status(400).json({ error: 'Reason for rejection is required' });
+    }
+
+    const query = `
+        UPDATE reenrollment_requests 
+        SET status = 'rejected', registrar_id = ?, registrar_remarks = ?, action_date = NOW() 
+        WHERE id = ? AND status = 'pending'
+    `;
+
+    db.query(query, [registrarId || null, remarks, id], (err, result) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Request not found or already processed' });
+        }
+
+        console.log('❌ Re-enrollment rejected:', id);
+        res.json({ success: true, message: 'Re-enrollment request rejected.' });
     });
 });
 
@@ -2546,7 +3020,7 @@ app.delete('/api/registrar/remarks/:id', (req, res) => {
 });
 
 // =============================================
-// 57. REPORTS - Students by Grade Level ✅ FIXED (No duplicates)
+// 57. REPORTS - Students by Grade Level
 // =============================================
 app.get('/api/admin/reports/students-by-grade', (req, res) => {
     const query = `

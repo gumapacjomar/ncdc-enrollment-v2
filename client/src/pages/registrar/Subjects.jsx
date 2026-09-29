@@ -66,7 +66,6 @@ const Subjects = () => {
         }
     };
 
-    // Generate a subject code from name (e.g., "Mathematics" → "MATH")
     const getSubjectCode = (name) => {
         if (!name) return '—';
         const words = name.trim().split(/\s+/);
@@ -140,7 +139,6 @@ const Subjects = () => {
         }
     };
 
-    // Filter subjects
     const filtered = subjects.filter(s => {
         const matchesGrade = !filterGrade || s.grade_level === filterGrade;
         const matchesSearch = !searchTerm ||
@@ -149,7 +147,6 @@ const Subjects = () => {
         return matchesGrade && matchesSearch;
     });
 
-    // Sort by grade then by subject name
     const sorted = [...filtered].sort((a, b) => {
         if (a.grade_level !== b.grade_level) {
             return a.grade_level.localeCompare(b.grade_level);
@@ -157,14 +154,18 @@ const Subjects = () => {
         return a.subject_name.localeCompare(b.subject_name);
     });
 
+    // ✅ UPDATED: Added Student History
     const menuItems = [
         { id: 'applications', icon: '📋', label: 'Applications', type: 'link', path: '/registrar/dashboard' },
         { id: 'enrolled', icon: '🎓', label: 'Enrolled Students', type: 'link', path: '/registrar/dashboard' },
         { id: 'sections', icon: '🏫', label: 'Sections', type: 'link', path: '/registrar/sections' },
         { id: 'subjects', icon: '📚', label: 'Subjects', type: 'link', path: '/registrar/subjects' },
         { id: 'enrollments', icon: '📝', label: 'Enrollments', type: 'link', path: '/registrar/enrollments' },
+        { id: 'reenrollment', icon: '🔄', label: 'Re-enrollment', type: 'link', path: '/registrar/re-enrollment-requests' },
         { id: 'grades', icon: '📊', label: 'Grades', type: 'link', path: '/registrar/grades' },
         { id: 'remarks', icon: '💬', label: 'Remarks', type: 'link', path: '/registrar/remarks' },
+        { id: 'honor-students', icon: '🏆', label: 'Honor Students', type: 'link', path: '/registrar/honor-students' },
+        { id: 'student-history', icon: '📚', label: 'Student History', type: 'link', path: '/registrar/student-history' },
         { id: 'settings', icon: '⚙️', label: 'Settings', type: 'link', path: '/registrar/dashboard' }
     ];
 
@@ -209,7 +210,7 @@ const Subjects = () => {
                         <div>
                             <span style={{ fontSize: '18px', fontWeight: '800', color: '#1f2937' }}>NCDC</span>
                             <br />
-                            <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Registrar Panel</span>
+                            <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Teacher Panel</span>
                         </div>
                     </div>
                 </div>
@@ -233,14 +234,14 @@ const Subjects = () => {
                         {profilePic ? (
                             <img src={profilePic} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : (
-                            user?.username?.charAt(0).toUpperCase() || 'R'
+                            user?.username?.charAt(0).toUpperCase() || 'T'
                         )}
                     </div>
                     <div>
                         <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
-                            {user?.username || 'Registrar'}
+                            {user?.username || 'Teacher'}
                         </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>Registrar</div>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>Teacher / Staff</div>
                     </div>
                 </Link>
 
@@ -358,7 +359,6 @@ const Subjects = () => {
                     }}>{message.text}</div>
                 )}
 
-                {/* Filter + Search */}
                 <div style={{
                     background: 'white', padding: '16px 20px', borderRadius: '12px',
                     marginBottom: '20px', border: '1px solid #e5e7eb',
@@ -366,9 +366,7 @@ const Subjects = () => {
                     display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap'
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <label style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>
-                            Filter:
-                        </label>
+                        <label style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>Filter:</label>
                         <select
                             value={filterGrade}
                             onChange={(e) => setFilterGrade(e.target.value)}
@@ -394,14 +392,6 @@ const Subjects = () => {
                                 fontSize: '14px', outline: 'none', background: '#f9fafb',
                                 boxSizing: 'border-box'
                             }}
-                            onFocus={(e) => {
-                                e.target.style.borderColor = '#1a56db';
-                                e.target.style.background = 'white';
-                            }}
-                            onBlur={(e) => {
-                                e.target.style.borderColor = '#d1d5db';
-                                e.target.style.background = '#f9fafb';
-                            }}
                         />
                     </div>
                     <span style={{
@@ -413,7 +403,6 @@ const Subjects = () => {
                     </span>
                 </div>
 
-                {/* TABLE */}
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '60px', color: '#6b7280' }}>
                         ⏳ Loading subjects...
@@ -438,21 +427,11 @@ const Subjects = () => {
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead>
                                     <tr style={{ background: '#f9fafb', borderBottom: '2px solid #e5e7eb' }}>
-                                        <th style={{ padding: '14px 20px', textAlign: 'left', fontSize: '12px', fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.5px', width: '100px' }}>
-                                            Code
-                                        </th>
-                                        <th style={{ padding: '14px 20px', textAlign: 'left', fontSize: '12px', fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.5px', width: '110px' }}>
-                                            Grade
-                                        </th>
-                                        <th style={{ padding: '14px 20px', textAlign: 'left', fontSize: '12px', fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                            Subject Description
-                                        </th>
-                                        <th style={{ padding: '14px 20px', textAlign: 'center', fontSize: '12px', fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.5px', width: '100px' }}>
-                                            Status
-                                        </th>
-                                        <th style={{ padding: '14px 20px', textAlign: 'center', fontSize: '12px', fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.5px', width: '150px' }}>
-                                            Actions
-                                        </th>
+                                        <th style={{ padding: '14px 20px', textAlign: 'left', fontSize: '12px', fontWeight: '700', color: '#374151', textTransform: 'uppercase', width: '100px' }}>Code</th>
+                                        <th style={{ padding: '14px 20px', textAlign: 'left', fontSize: '12px', fontWeight: '700', color: '#374151', textTransform: 'uppercase', width: '110px' }}>Grade</th>
+                                        <th style={{ padding: '14px 20px', textAlign: 'left', fontSize: '12px', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Subject Description</th>
+                                        <th style={{ padding: '14px 20px', textAlign: 'center', fontSize: '12px', fontWeight: '700', color: '#374151', textTransform: 'uppercase', width: '100px' }}>Status</th>
+                                        <th style={{ padding: '14px 20px', textAlign: 'center', fontSize: '12px', fontWeight: '700', color: '#374151', textTransform: 'uppercase', width: '150px' }}>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -471,17 +450,11 @@ const Subjects = () => {
                                             </td>
                                             <td style={{ padding: '14px 20px' }}>
                                                 <span style={{
-                                                    display: 'inline-block',
-                                                    padding: '3px 10px',
-                                                    background: '#dbeafe',
-                                                    color: '#1a56db',
-                                                    borderRadius: '10px',
-                                                    fontSize: '12px',
-                                                    fontWeight: '600',
-                                                    whiteSpace: 'nowrap'
-                                                }}>
-                                                    {item.grade_level}
-                                                </span>
+                                                    display: 'inline-block', padding: '3px 10px',
+                                                    background: '#dbeafe', color: '#1a56db',
+                                                    borderRadius: '10px', fontSize: '12px',
+                                                    fontWeight: '600', whiteSpace: 'nowrap'
+                                                }}>{item.grade_level}</span>
                                             </td>
                                             <td style={{ padding: '14px 20px' }}>
                                                 <div style={{ fontSize: '14px', color: '#1f2937', fontWeight: '600' }}>
@@ -495,70 +468,33 @@ const Subjects = () => {
                                             </td>
                                             <td style={{ padding: '14px 20px', textAlign: 'center' }}>
                                                 <span style={{
-                                                    padding: '3px 10px',
-                                                    borderRadius: '10px',
-                                                    fontSize: '11px',
-                                                    fontWeight: '700',
+                                                    padding: '3px 10px', borderRadius: '10px',
+                                                    fontSize: '11px', fontWeight: '700',
                                                     background: item.status === 'active' ? '#d1fae5' : '#fee2e2',
                                                     color: item.status === 'active' ? '#065f46' : '#991b1b',
-                                                    textTransform: 'uppercase',
-                                                    letterSpacing: '0.3px'
-                                                }}>
-                                                    {item.status || 'active'}
-                                                </span>
+                                                    textTransform: 'uppercase'
+                                                }}>{item.status || 'active'}</span>
                                             </td>
                                             <td style={{ padding: '14px 20px', textAlign: 'center' }}>
                                                 <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
                                                     <button
                                                         onClick={() => handleEdit(item)}
-                                                        title="Edit"
                                                         style={{
-                                                            background: '#fef3c7',
-                                                            color: '#92400e',
-                                                            border: 'none',
-                                                            padding: '6px 12px',
-                                                            borderRadius: '6px',
-                                                            cursor: 'pointer',
-                                                            fontSize: '12px',
-                                                            fontWeight: '600',
-                                                            transition: 'all 0.2s ease'
+                                                            background: '#fef3c7', color: '#92400e',
+                                                            border: 'none', padding: '6px 12px',
+                                                            borderRadius: '6px', cursor: 'pointer',
+                                                            fontSize: '12px', fontWeight: '600'
                                                         }}
-                                                        onMouseEnter={(e) => {
-                                                            e.currentTarget.style.background = '#fbbf24';
-                                                            e.currentTarget.style.color = 'white';
-                                                        }}
-                                                        onMouseLeave={(e) => {
-                                                            e.currentTarget.style.background = '#fef3c7';
-                                                            e.currentTarget.style.color = '#92400e';
-                                                        }}
-                                                    >
-                                                        ✏️ Edit
-                                                    </button>
+                                                    >✏️ Edit</button>
                                                     <button
                                                         onClick={() => handleDelete(item.id, item.subject_name)}
-                                                        title="Delete"
                                                         style={{
-                                                            background: '#fee2e2',
-                                                            color: '#991b1b',
-                                                            border: 'none',
-                                                            padding: '6px 12px',
-                                                            borderRadius: '6px',
-                                                            cursor: 'pointer',
-                                                            fontSize: '12px',
-                                                            fontWeight: '600',
-                                                            transition: 'all 0.2s ease'
+                                                            background: '#fee2e2', color: '#991b1b',
+                                                            border: 'none', padding: '6px 12px',
+                                                            borderRadius: '6px', cursor: 'pointer',
+                                                            fontSize: '12px', fontWeight: '600'
                                                         }}
-                                                        onMouseEnter={(e) => {
-                                                            e.currentTarget.style.background = '#ef4444';
-                                                            e.currentTarget.style.color = 'white';
-                                                        }}
-                                                        onMouseLeave={(e) => {
-                                                            e.currentTarget.style.background = '#fee2e2';
-                                                            e.currentTarget.style.color = '#991b1b';
-                                                        }}
-                                                    >
-                                                        🗑️ Delete
-                                                    </button>
+                                                    >🗑️ Delete</button>
                                                 </div>
                                             </td>
                                         </tr>

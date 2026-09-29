@@ -71,7 +71,7 @@ const ConfirmEnrollments = () => {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <span style={{ fontSize: '14px', color: '#374151' }}>
-            👋 {JSON.parse(localStorage.getItem('user'))?.username || 'Admin'}
+            👋 {JSON.parse(localStorage.getItem('user'))?.username || 'Principal'}
           </span>
           <button
             onClick={() => {

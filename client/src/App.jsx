@@ -20,9 +20,12 @@ import RegistrarSubjects from './pages/registrar/Subjects';
 import RegistrarEnrollments from './pages/registrar/Enrollments';
 import RegistrarGrades from './pages/registrar/Grades';
 import RegistrarRemarks from './pages/registrar/Remarks';
+import ReEnrollmentRequests from './pages/registrar/ReEnrollmentRequests';
 import StudentMonitoring from './pages/admin/StudentMonitoring';
 import GradeReports from './pages/admin/GradeReports';
 import StudentHistory from './pages/admin/StudentHistory';
+import AdminHonorStudents from './pages/admin/HonorStudents';
+import RegistrarHonorStudents from './pages/registrar/HonorStudents';
 
 function App() {
   return (
@@ -39,8 +42,11 @@ function App() {
         <Route path="/registrar/sections" element={<RegistrarSections />} />
         <Route path="/registrar/subjects" element={<RegistrarSubjects />} />
         <Route path="/registrar/enrollments" element={<RegistrarEnrollments />} />
+        <Route path="/registrar/re-enrollment-requests" element={<ReEnrollmentRequests />} />
         <Route path="/registrar/grades" element={<RegistrarGrades />} />
         <Route path="/registrar/remarks" element={<RegistrarRemarks />} />
+        <Route path="/registrar/honor-students" element={<RegistrarHonorStudents />} />
+        <Route path="/registrar/student-history" element={<StudentHistory />} />
         
         {/* Admin Routes */}
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
@@ -52,6 +58,7 @@ function App() {
         <Route path="/admin/reports" element={<Reports />} />
         <Route path="/admin/student-monitoring" element={<StudentMonitoring />} />
         <Route path="/admin/grade-reports" element={<GradeReports />} />
+        <Route path="/admin/honor-students" element={<AdminHonorStudents />} />
         <Route path="/admin/student-history" element={<StudentHistory />} />
         <Route path="/admin/profile" element={<AdminProfile />} />
         

@@ -74,7 +74,7 @@ const Reports = () => {
   });
 
   const exportToCSV = () => {
-    const headers = ['Name', 'Email', 'Contact', 'Status', 'Date', 'Registrar', 'Admin'];
+    const headers = ['Name', 'Email', 'Contact', 'Status', 'Date', 'Teacher', 'Principal'];
     const rows = filteredApplications.map(app => [
       `${app.first_name || ''} ${app.last_name || ''}`,
       app.email || 'N/A',
@@ -160,7 +160,7 @@ const Reports = () => {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <span style={{ fontSize: '14px', color: '#374151' }}>
-            👋 {JSON.parse(localStorage.getItem('user'))?.username || 'Admin'}
+            👋 {JSON.parse(localStorage.getItem('user'))?.username || 'Principal'}
           </span>
           <button
             onClick={() => {
@@ -500,8 +500,8 @@ const Reports = () => {
                     <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#374151' }}>Email</th>
                     <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#374151' }}>Status</th>
                     <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#374151' }}>Date</th>
-                    <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#374151' }}>Registrar</th>
-                    <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#374151' }}>Admin</th>
+                    <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#374151' }}>Teacher</th>
+                    <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#374151' }}>Principal</th>
                   </tr>
                 </thead>
                 <tbody>

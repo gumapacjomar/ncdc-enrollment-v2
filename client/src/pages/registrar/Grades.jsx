@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import API from '../../services/api';
 import UPLOADS_URL from '../../services/uploads';
+import { computeHonorFromGrades } from '../../utils/honors';
 
 const Grades = () => {
     const navigate = useNavigate();
@@ -13,14 +14,22 @@ const Grades = () => {
     const [message, setMessage] = useState({ type: '', text: '' });
 
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedStudent, setSelectedStudent] = useState(null); // { student_id, public_id, first_name, ... }
-    const [selectedGradeLevel, setSelectedGradeLevel] = useState(''); // active tab
+    const [selectedStudent, setSelectedStudent] = useState(null);
+    const [selectedGradeLevel, setSelectedGradeLevel] = useState('');
     const [showResults, setShowResults] = useState(false);
 
-    // Bulk grades: { subject: { Q1: {grade, existing_id}, ... } }
     const [bulkGrades, setBulkGrades] = useState({});
+    const [activeColumns, setActiveColumns] = useState(['Term 1', 'Term 2', 'Term 3']);
 
-    const quarters = ['1st Quarter', '2nd Quarter', '3rd Quarter', '4th Quarter'];
+    const [selectedGradeFilter, setSelectedGradeFilter] = useState('');
+    const [gradeStudentList, setGradeStudentList] = useState([]);
+
+    const OLD_QUARTERS = ['1st Quarter', '2nd Quarter', '3rd Quarter', '4th Quarter'];
+    const NEW_TERMS = ['Term 1', 'Term 2', 'Term 3'];
+    const OLD_DISPLAY = ['Q1', 'Q2', 'Q3', 'Q4'];
+    const NEW_DISPLAY = ['Term 1', 'Term 2', 'Term 3'];
+
+    const gradeLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
 
     const [profilePic, setProfilePic] = useState(null);
     const user = JSON.parse(localStorage.getItem('user'));
@@ -95,34 +104,47 @@ const Grades = () => {
         return 'Failed';
     };
 
-    // =============================================
-    // DEDUPE STUDENTS — isa ra per student
-    // =============================================
+    const detectColumns = (existingGrades) => {
+        if (!existingGrades || existingGrades.length === 0) {
+            return { isOldSystem: false, quarters: NEW_TERMS, displayHeaders: NEW_DISPLAY };
+        }
+
+        const hasOldQuarters = existingGrades.some(g => 
+            g.quarter && g.quarter.toLowerCase().includes('quarter')
+        );
+
+        if (hasOldQuarters) {
+            return { isOldSystem: true, quarters: OLD_QUARTERS, displayHeaders: OLD_DISPLAY };
+        }
+
+        return { isOldSystem: false, quarters: NEW_TERMS, displayHeaders: NEW_DISPLAY };
+    };
+
     const getUniqueStudents = () => {
         const map = {};
         enrollments.forEach(e => {
-            if (!map[e.student_id]) {
-                map[e.student_id] = {
-                    student_id: e.student_id,
-                    public_id: e.public_id,
-                    first_name: e.first_name,
-                    middle_name: e.middle_name,
-                    last_name: e.last_name,
-                    enrollments: []
-                };
+            if (e.status === 'enrolled') {
+                if (!map[e.student_id]) {
+                    map[e.student_id] = {
+                        student_id: e.student_id,
+                        public_id: e.public_id,
+                        first_name: e.first_name,
+                        middle_name: e.middle_name,
+                        last_name: e.last_name,
+                        enrollments: []
+                    };
+                }
+                map[e.student_id].enrollments.push(e);
             }
-            map[e.student_id].enrollments.push(e);
         });
 
         return Object.values(map).map(s => {
-            // Sort enrollments by grade level (Grade 1 → Grade 6)
             s.enrollments.sort((a, b) => {
                 const numA = parseInt((a.grade_level || '').replace(/\D/g, '')) || 0;
                 const numB = parseInt((b.grade_level || '').replace(/\D/g, '')) || 0;
                 return numA - numB;
             });
 
-            // Current grade = last enrollment (highest grade)
             const current = s.enrollments[s.enrollments.length - 1];
             s.current_grade_level = current?.grade_level || '';
             s.current_school_year = current?.school_year || '';
@@ -141,16 +163,30 @@ const Grades = () => {
         return fullName.includes(search) || (s.public_id || '').toLowerCase().includes(search);
     });
 
-    // =============================================
-    // PREPARE BULK ENTRIES for selected grade level
-    // =============================================
-    const prepareBulkEntries = (student, gradeLevel, existingGrades) => {
+    const getGradeCount = (gradeLevel) => {
+        return uniqueStudents.filter(s => s.current_grade_level === gradeLevel).length;
+    };
+
+    const handleGradeFilterClick = (gradeLevel) => {
+        if (selectedGradeFilter === gradeLevel) {
+            setSelectedGradeFilter('');
+            setGradeStudentList([]);
+        } else {
+            setSelectedGradeFilter(gradeLevel);
+            const students = uniqueStudents.filter(s => s.current_grade_level === gradeLevel);
+            // Sort by last name
+            students.sort((a, b) => (a.last_name || '').localeCompare(b.last_name || ''));
+            setGradeStudentList(students);
+        }
+    };
+
+    const prepareBulkEntries = (student, gradeLevel, existingGrades, columns) => {
         const gradeSubjects = subjects.filter(s => s.grade_level === gradeLevel);
         const bulk = {};
 
         gradeSubjects.forEach(subject => {
             bulk[subject.subject_name] = {};
-            quarters.forEach(q => {
+            columns.forEach(q => {
                 const existing = existingGrades.find(
                     g => g.subject === subject.subject_name && g.quarter === q
                 );
@@ -168,9 +204,6 @@ const Grades = () => {
         setBulkGrades(bulk);
     };
 
-    // =============================================
-    // SELECT STUDENT → default to current grade level
-    // =============================================
     const handleSelectStudent = async (student) => {
         setSelectedStudent(student);
         setSearchTerm(`${student.first_name} ${student.middle_name || ''} ${student.last_name}`.trim());
@@ -178,21 +211,26 @@ const Grades = () => {
         setMessage({ type: '', text: '' });
         setBulkGrades({});
 
-        // Default to current (highest) grade level
         const currentGrade = student.current_grade_level;
         setSelectedGradeLevel(currentGrade);
 
-        // Find the enrollment for current grade
         const enrollment = student.enrollments.find(e => e.grade_level === currentGrade);
         if (enrollment) {
             const existing = await fetchGradesByEnrollment(enrollment.id);
-            prepareBulkEntries(student, currentGrade, existing);
+            const detection = detectColumns(existing);
+            setActiveColumns(detection.quarters);
+            prepareBulkEntries(student, currentGrade, existing, detection.quarters);
         }
+
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    // =============================================
-    // CHANGE GRADE LEVEL (tab click)
-    // =============================================
+    const handleStudentFromListClick = (student) => {
+        handleSelectStudent(student);
+        setSelectedGradeFilter('');
+        setGradeStudentList([]);
+    };
+
     const handleGradeLevelChange = async (gradeLevel) => {
         if (!selectedStudent) return;
         setSelectedGradeLevel(gradeLevel);
@@ -202,7 +240,9 @@ const Grades = () => {
         const enrollment = selectedStudent.enrollments.find(e => e.grade_level === gradeLevel);
         if (enrollment) {
             const existing = await fetchGradesByEnrollment(enrollment.id);
-            prepareBulkEntries(selectedStudent, gradeLevel, existing);
+            const detection = detectColumns(existing);
+            setActiveColumns(detection.quarters);
+            prepareBulkEntries(selectedStudent, gradeLevel, existing, detection.quarters);
         }
     };
 
@@ -212,11 +252,11 @@ const Grades = () => {
         setSearchTerm('');
         setShowResults(false);
         setBulkGrades({});
+        setActiveColumns(NEW_TERMS);
+        setSelectedGradeFilter('');
+        setGradeStudentList([]);
     };
 
-    // =============================================
-    // GRADE INPUT
-    // =============================================
     const handleGradeChange = (subject, quarter, value) => {
         setBulkGrades(prev => ({
             ...prev,
@@ -230,26 +270,21 @@ const Grades = () => {
         }));
     };
 
-    // =============================================
-    // SAVE ALL GRADES for selected grade level
-    // =============================================
     const handleSaveAll = async () => {
         if (!selectedStudent || !selectedGradeLevel) {
             setMessage({ type: 'error', text: 'Please select a student first' });
             return;
         }
 
-        // Find the enrollment for selected grade
         const enrollment = selectedStudent.enrollments.find(e => e.grade_level === selectedGradeLevel);
         if (!enrollment) {
             setMessage({ type: 'error', text: 'No enrollment found for this grade level' });
             return;
         }
 
-        // Collect all entries with grades
         const allEntries = [];
         Object.keys(bulkGrades).forEach(subject => {
-            quarters.forEach(q => {
+            activeColumns.forEach(q => {
                 const entry = bulkGrades[subject][q];
                 if (entry.grade !== '' && entry.grade !== null && entry.grade !== undefined) {
                     allEntries.push({
@@ -310,7 +345,7 @@ const Grades = () => {
             }
 
             const existing = await fetchGradesByEnrollment(enrollment.id);
-            prepareBulkEntries(selectedStudent, selectedGradeLevel, existing);
+            prepareBulkEntries(selectedStudent, selectedGradeLevel, existing, activeColumns);
 
             setMessage({
                 type: 'success',
@@ -324,11 +359,8 @@ const Grades = () => {
         }
     };
 
-    // =============================================
-    // FIX REMARKS (all existing grades)
-    // =============================================
     const handleFixRemarks = async () => {
-        if (!window.confirm('⚠️ FIX ALL EXISTING GRADES REMARKS?')) return;
+        if (!window.confirm('⚠️ FIX ALL EXISTING GRADES REMARKS?\n\nThis will check both Q1-Q4 (old) and Term 1-3 (new) formats.')) return;
 
         setFixing(true);
         setMessage({ type: '', text: '' });
@@ -366,12 +398,11 @@ const Grades = () => {
 
             setMessage({ type: 'success', text: `✅ Fixed ${totalFixed} grade(s)!` });
 
-            // Reload current selection
             if (selectedStudent && selectedGradeLevel) {
                 const enrollment = selectedStudent.enrollments.find(e => e.grade_level === selectedGradeLevel);
                 if (enrollment) {
                     const existing = await fetchGradesByEnrollment(enrollment.id);
-                    prepareBulkEntries(selectedStudent, selectedGradeLevel, existing);
+                    prepareBulkEntries(selectedStudent, selectedGradeLevel, existing, activeColumns);
                 }
             }
         } catch (err) {
@@ -383,7 +414,7 @@ const Grades = () => {
     };
 
     const computeSubjectAverage = (subjectQuarters) => {
-        const vals = quarters.map(q => parseFloat(subjectQuarters[q]?.grade)).filter(v => !isNaN(v));
+        const vals = activeColumns.map(q => parseFloat(subjectQuarters[q]?.grade)).filter(v => !isNaN(v));
         if (vals.length === 0) return null;
         return (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2);
     };
@@ -392,13 +423,32 @@ const Grades = () => {
         if (!bulkGrades || Object.keys(bulkGrades).length === 0) return 0;
         const allVals = [];
         Object.keys(bulkGrades).forEach(subject => {
-            quarters.forEach(q => {
+            activeColumns.forEach(q => {
                 const g = parseFloat(bulkGrades[subject][q]?.grade);
                 if (!isNaN(g)) allVals.push(g);
             });
         });
         if (allVals.length === 0) return 0;
         return (allVals.reduce((a, b) => a + b, 0) / allVals.length).toFixed(2);
+    };
+
+    const getCurrentHonor = () => {
+        if (!bulkGrades || Object.keys(bulkGrades).length === 0) return null;
+        
+        const allGrades = [];
+        Object.keys(bulkGrades).forEach(subject => {
+            activeColumns.forEach(q => {
+                const gradeVal = bulkGrades[subject][q]?.grade;
+                if (gradeVal !== '' && gradeVal !== null && gradeVal !== undefined) {
+                    allGrades.push({ subject, grade: gradeVal });
+                }
+            });
+        });
+
+        if (allGrades.length === 0) return null;
+        
+        const honor = computeHonorFromGrades(allGrades);
+        return honor.isHonor ? honor : null;
     };
 
     const gradeColor = (grade) => {
@@ -429,8 +479,11 @@ const Grades = () => {
         { id: 'sections', icon: '🏫', label: 'Sections', type: 'link', path: '/registrar/sections' },
         { id: 'subjects', icon: '📚', label: 'Subjects', type: 'link', path: '/registrar/subjects' },
         { id: 'enrollments', icon: '📝', label: 'Enrollments', type: 'link', path: '/registrar/enrollments' },
+        { id: 'reenrollment', icon: '🔄', label: 'Re-enrollment', type: 'link', path: '/registrar/re-enrollment-requests' },
         { id: 'grades', icon: '📊', label: 'Grades', type: 'link', path: '/registrar/grades' },
         { id: 'remarks', icon: '💬', label: 'Remarks', type: 'link', path: '/registrar/remarks' },
+        { id: 'honor-students', icon: '🏆', label: 'Honor Students', type: 'link', path: '/registrar/honor-students' },
+        { id: 'student-history', icon: '📚', label: 'Student History', type: 'link', path: '/registrar/student-history' },
         { id: 'settings', icon: '⚙️', label: 'Settings', type: 'link', path: '/registrar/dashboard' }
     ];
 
@@ -443,6 +496,8 @@ const Grades = () => {
     const availableGradeLevels = selectedStudent
         ? selectedStudent.enrollments.map(e => e.grade_level)
         : [];
+
+    const currentHonor = getCurrentHonor();
 
     return (
         <div style={{
@@ -472,7 +527,7 @@ const Grades = () => {
                         <div>
                             <span style={{ fontSize: '18px', fontWeight: '800', color: '#1f2937' }}>NCDC</span>
                             <br />
-                            <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Registrar Panel</span>
+                            <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Teacher Panel</span>
                         </div>
                     </div>
                 </div>
@@ -494,14 +549,14 @@ const Grades = () => {
                         {profilePic ? (
                             <img src={profilePic} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : (
-                            user?.username?.charAt(0).toUpperCase() || 'R'
+                            user?.username?.charAt(0).toUpperCase() || 'T'
                         )}
                     </div>
                     <div>
                         <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
-                            {user?.username || 'Registrar'}
+                            {user?.username || 'Teacher'}
                         </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>Registrar</div>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>Teacher / Staff</div>
                     </div>
                 </Link>
 
@@ -564,7 +619,7 @@ const Grades = () => {
                             📊 Grades Management
                         </h1>
                         <p style={{ color: '#6b7280', marginTop: '4px', fontSize: '14px' }}>
-                            Select a student, choose grade level, and enter grades per quarter
+                            Select a student, choose grade level, and enter grades per term
                         </p>
                     </div>
                     <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
@@ -608,10 +663,10 @@ const Grades = () => {
                     }}>{message.text}</div>
                 )}
 
-                {/* Search Student */}
+                {/* SEARCH */}
                 <div style={{
                     background: 'white', padding: '20px', borderRadius: '14px',
-                    marginBottom: '24px', border: '1px solid #e5e7eb',
+                    marginBottom: '20px', border: '1px solid #e5e7eb',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
                     position: 'relative', zIndex: 10
                 }}>
@@ -692,6 +747,242 @@ const Grades = () => {
                     <div onClick={() => setShowResults(false)} style={{ position: 'fixed', inset: 0, zIndex: 5, background: 'transparent' }} />
                 )}
 
+                {/* ✅ GRADE FILTER + STUDENT LIST */}
+                {!selectedStudent && (
+                    <div style={{
+                        background: 'white', padding: '20px', borderRadius: '14px',
+                        marginBottom: '20px', border: '1px solid #e5e7eb',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+                    }}>
+                        <div style={{ 
+                            marginBottom: '12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            flexWrap: 'wrap'
+                        }}>
+                            <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                                📚 Browse by Grade Level:
+                            </span>
+                            <span style={{ fontSize: '12px', color: '#9ca3af', fontStyle: 'italic' }}>
+                                (Click to view students)
+                            </span>
+                        </div>
+
+                        {/* Compact text-based grade filter */}
+                        <div style={{ 
+                            display: 'flex', 
+                            gap: '20px', 
+                            flexWrap: 'wrap',
+                            paddingBottom: '8px',
+                            borderBottom: '1px solid #f3f4f6'
+                        }}>
+                            {gradeLevels.map(grade => {
+                                const count = getGradeCount(grade);
+                                const isActive = selectedGradeFilter === grade;
+                                return (
+                                    <button
+                                        key={grade}
+                                        onClick={() => handleGradeFilterClick(grade)}
+                                        style={{
+                                            background: 'transparent',
+                                            border: 'none',
+                                            padding: '4px 0',
+                                            cursor: count > 0 ? 'pointer' : 'not-allowed',
+                                            fontSize: '14px',
+                                            fontWeight: isActive ? '700' : '500',
+                                            color: isActive 
+                                                ? '#1a56db' 
+                                                : count > 0 ? '#374151' : '#9ca3af',
+                                            borderBottom: isActive 
+                                                ? '2px solid #1a56db' 
+                                                : '2px solid transparent',
+                                            transition: 'all 0.2s ease',
+                                            opacity: count > 0 ? 1 : 0.5
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            if (count > 0 && !isActive) {
+                                                e.currentTarget.style.color = '#1a56db';
+                                            }
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            if (count > 0 && !isActive) {
+                                                e.currentTarget.style.color = '#374151';
+                                            }
+                                        }}
+                                    >
+                                        {grade} <span style={{ fontSize: '12px', opacity: 0.7 }}>({count})</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* ✅ NEW: List-style student display */}
+                        {selectedGradeFilter && (
+                            <div style={{ marginTop: '16px' }}>
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    marginBottom: '12px',
+                                    paddingBottom: '10px',
+                                    borderBottom: '1px solid #f3f4f6'
+                                }}>
+                                    <div style={{ 
+                                        fontSize: '14px', 
+                                        fontWeight: '700', 
+                                        color: '#1f2937',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px'
+                                    }}>
+                                        📋 {selectedGradeFilter} Students
+                                        <span style={{ 
+                                            fontSize: '12px', 
+                                            fontWeight: '500',
+                                            color: '#6b7280',
+                                            background: '#f3f4f6',
+                                            padding: '2px 10px',
+                                            borderRadius: '10px'
+                                        }}>
+                                            {gradeStudentList.length}
+                                        </span>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            setSelectedGradeFilter('');
+                                            setGradeStudentList([]);
+                                        }}
+                                        style={{
+                                            background: 'transparent',
+                                            border: 'none',
+                                            color: '#6b7280',
+                                            cursor: 'pointer',
+                                            fontSize: '13px',
+                                            fontWeight: '600'
+                                        }}
+                                    >
+                                        ✖ Close
+                                    </button>
+                                </div>
+
+                                {gradeStudentList.length === 0 ? (
+                                    <div style={{ 
+                                        padding: '30px 20px', 
+                                        textAlign: 'center', 
+                                        color: '#6b7280',
+                                        fontSize: '14px'
+                                    }}>
+                                        Wala pay students sa {selectedGradeFilter}
+                                    </div>
+                                ) : (
+                                    <div style={{
+                                        background: 'white',
+                                        borderRadius: '8px',
+                                        border: '1px solid #f3f4f6',
+                                        overflow: 'hidden'
+                                    }}>
+                                        {gradeStudentList.map((student, index) => (
+                                            <div
+                                                key={student.student_id}
+                                                onClick={() => handleStudentFromListClick(student)}
+                                                style={{
+                                                    padding: '12px 16px',
+                                                    borderBottom: index < gradeStudentList.length - 1 ? '1px solid #f3f4f6' : 'none',
+                                                    cursor: 'pointer',
+                                                    transition: 'background 0.15s ease',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '16px'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.background = '#f0f4ff';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.background = 'white';
+                                                }}
+                                            >
+                                                {/* Number */}
+                                                <div style={{
+                                                    fontSize: '13px',
+                                                    color: '#9ca3af',
+                                                    fontWeight: '600',
+                                                    minWidth: '24px',
+                                                    flexShrink: 0
+                                                }}>
+                                                    {index + 1}
+                                                </div>
+
+                                                {/* Name + ID */}
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{
+                                                        fontSize: '14px',
+                                                        fontWeight: '600',
+                                                        color: '#1f2937',
+                                                        whiteSpace: 'nowrap',
+                                                        overflow: 'hidden',
+                                                        textOverflow: 'ellipsis'
+                                                    }}>
+                                                        {student.first_name} {student.middle_name || ''} {student.last_name}
+                                                    </div>
+                                                    <div style={{
+                                                        fontSize: '11px',
+                                                        color: '#6b7280',
+                                                        marginTop: '2px'
+                                                    }}>
+                                                        {student.public_id || '—'}
+                                                    </div>
+                                                </div>
+
+                                                {/* Grade */}
+                                                <div style={{
+                                                    fontSize: '13px',
+                                                    color: '#374151',
+                                                    fontWeight: '500',
+                                                    minWidth: '70px',
+                                                    flexShrink: 0
+                                                }}>
+                                                    {student.current_grade_level}
+                                                </div>
+
+                                                {/* Section */}
+                                                <div style={{
+                                                    fontSize: '13px',
+                                                    color: '#6b7280',
+                                                    minWidth: '100px',
+                                                    flexShrink: 0
+                                                }}>
+                                                    {student.current_section || '—'}
+                                                </div>
+
+                                                {/* School Year */}
+                                                <div style={{
+                                                    fontSize: '13px',
+                                                    color: '#9ca3af',
+                                                    minWidth: '90px',
+                                                    flexShrink: 0
+                                                }}>
+                                                    {student.current_school_year}
+                                                </div>
+
+                                                {/* Icon */}
+                                                <div style={{
+                                                    fontSize: '18px',
+                                                    color: '#1a56db',
+                                                    flexShrink: 0,
+                                                    opacity: 0.6
+                                                }}>
+                                                    📊
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {selectedStudent && (
                     <>
                         {/* Student Info Card */}
@@ -701,13 +992,36 @@ const Grades = () => {
                             boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
                         }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-                                <div>
-                                    <div style={{ fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>
-                                        {selectedStudent.first_name} {selectedStudent.middle_name || ''} {selectedStudent.last_name}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                                    <div>
+                                        <div style={{ fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>
+                                            {selectedStudent.first_name} {selectedStudent.middle_name || ''} {selectedStudent.last_name}
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
+                                            {selectedStudent.public_id}
+                                        </div>
                                     </div>
-                                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
-                                        {selectedStudent.public_id}
-                                    </div>
+                                    {currentHonor && (
+                                        <span style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            padding: '6px 14px',
+                                            borderRadius: '12px',
+                                            fontSize: '12px',
+                                            fontWeight: '700',
+                                            background: currentHonor.tier.bg,
+                                            color: currentHonor.tier.color,
+                                            border: `2px solid ${currentHonor.tier.border}`,
+                                            boxShadow: `0 2px 8px ${currentHonor.tier.border}40`
+                                        }}>
+                                            <span style={{ fontSize: '16px' }}>{currentHonor.tier.icon}</span>
+                                            {currentHonor.tier.label}
+                                            <span style={{ marginLeft: '4px', fontSize: '11px', opacity: 0.85 }}>
+                                                (Ave: {currentHonor.average.toFixed(2)})
+                                            </span>
+                                        </span>
+                                    )}
                                 </div>
                                 <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
                                     <div>
@@ -722,6 +1036,21 @@ const Grades = () => {
                                             {selectedStudent.current_section || '—'}
                                         </div>
                                     </div>
+                                    <button
+                                        onClick={handleClearSelection}
+                                        style={{
+                                            background: '#f3f4f6',
+                                            color: '#6b7280',
+                                            border: '1px solid #d1d5db',
+                                            padding: '8px 16px',
+                                            borderRadius: '8px',
+                                            cursor: 'pointer',
+                                            fontSize: '13px',
+                                            fontWeight: '600'
+                                        }}
+                                    >
+                                        ✖ Clear
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -794,9 +1123,21 @@ const Grades = () => {
                                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                     marginBottom: '16px', flexWrap: 'wrap', gap: '12px'
                                 }}>
-                                    <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1f2937', margin: 0 }}>
-                                        📋 {selectedGradeLevel} — Report Card Entry
-                                    </h3>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                                        <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1f2937', margin: 0 }}>
+                                            📋 {selectedGradeLevel} — Report Card Entry
+                                        </h3>
+                                        <span style={{
+                                            fontSize: '11px',
+                                            padding: '4px 10px',
+                                            borderRadius: '12px',
+                                            fontWeight: '700',
+                                            background: activeColumns.length === 3 ? '#dbeafe' : '#fef3c7',
+                                            color: activeColumns.length === 3 ? '#1a56db' : '#92400e'
+                                        }}>
+                                            {activeColumns.length === 3 ? '📘 New System (3 Terms)' : '📗 Old System (4 Quarters)'}
+                                        </span>
+                                    </div>
                                     <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
                                         <div style={{ fontSize: '13px', color: '#6b7280' }}>
                                             S.Y. <strong>{selectedEnrollmentData?.school_year}</strong>
@@ -815,15 +1156,16 @@ const Grades = () => {
 
                                 <div style={{ overflowX: 'auto' }}>
                                     <table style={{
-                                        width: '100%', borderCollapse: 'collapse', minWidth: '900px'
+                                        width: '100%', borderCollapse: 'collapse', minWidth: activeColumns.length === 3 ? '750px' : '900px'
                                     }}>
                                         <thead>
                                             <tr style={{ background: '#800000', color: 'white' }}>
                                                 <th style={{ padding: '14px 16px', textAlign: 'left', fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', minWidth: '180px', borderRight: '1px solid rgba(255,255,255,0.15)' }}>SUBJECTS</th>
-                                                <th style={{ padding: '14px 8px', textAlign: 'center', fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', width: '110px', borderRight: '1px solid rgba(255,255,255,0.15)' }}>Q1</th>
-                                                <th style={{ padding: '14px 8px', textAlign: 'center', fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', width: '110px', borderRight: '1px solid rgba(255,255,255,0.15)' }}>Q2</th>
-                                                <th style={{ padding: '14px 8px', textAlign: 'center', fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', width: '110px', borderRight: '1px solid rgba(255,255,255,0.15)' }}>Q3</th>
-                                                <th style={{ padding: '14px 8px', textAlign: 'center', fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', width: '110px', borderRight: '1px solid rgba(255,255,255,0.15)' }}>Q4</th>
+                                                {activeColumns.map((col, idx) => (
+                                                    <th key={idx} style={{ padding: '14px 8px', textAlign: 'center', fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', width: '110px', borderRight: '1px solid rgba(255,255,255,0.15)' }}>
+                                                        {col.replace('1st Quarter', 'Q1').replace('2nd Quarter', 'Q2').replace('3rd Quarter', 'Q3').replace('4th Quarter', 'Q4')}
+                                                    </th>
+                                                ))}
                                                 <th style={{ padding: '14px 12px', textAlign: 'center', fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', width: '110px', borderRight: '1px solid rgba(255,255,255,0.15)' }}>FINAL AVE</th>
                                                 <th style={{ padding: '14px 12px', textAlign: 'center', fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', width: '150px' }}>REMARKS</th>
                                             </tr>
@@ -849,8 +1191,10 @@ const Grades = () => {
                                                             {subject}
                                                         </td>
 
-                                                        {quarters.map(q => {
+                                                        {activeColumns.map(q => {
                                                             const entry = subjectQuarters[q];
+                                                            if (!entry) return <td key={q} style={{ padding: '10px 8px', textAlign: 'center' }}>—</td>;
+                                                            
                                                             const gradeNum = parseFloat(entry.grade);
                                                             const gc = !isNaN(gradeNum) ? gradeColor(gradeNum) : null;
                                                             
@@ -937,7 +1281,7 @@ const Grades = () => {
                                     alignItems: 'center', flexWrap: 'wrap', gap: '12px'
                                 }}>
                                     <div style={{ fontSize: '14px', color: '#6b7280' }}>
-                                        💡 <strong>{Object.keys(bulkGrades).length}</strong> subjects • Auto-remarks based sa final average
+                                        💡 <strong>{Object.keys(bulkGrades).length}</strong> subjects • {activeColumns.length} {activeColumns.length === 3 ? 'terms' : 'quarters'}
                                     </div>
                                     <button
                                         onClick={handleSaveAll}
@@ -958,14 +1302,14 @@ const Grades = () => {
                     </>
                 )}
 
-                {!selectedStudent && !searchTerm && (
+                {!selectedStudent && !searchTerm && !selectedGradeFilter && (
                     <div style={{
                         background: 'white', padding: '60px', borderRadius: '14px',
                         textAlign: 'center', color: '#6b7280', border: '1px solid #e5e7eb'
                     }}>
                         <div style={{ fontSize: '64px', marginBottom: '12px' }}>📊</div>
-                        <h3 style={{ color: '#1f2937', marginBottom: '8px' }}>Search for a Student</h3>
-                        <p>Type a student's name or ID above to begin entering grades.</p>
+                        <h3 style={{ color: '#1f2937', marginBottom: '8px' }}>Select a Student</h3>
+                        <p>Search above OR browse by grade level to begin entering grades.</p>
                     </div>
                 )}
 

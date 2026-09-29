@@ -14,13 +14,12 @@ const Enrollments = () => {
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState({ type: '', text: '' });
     const [filterGrade, setFilterGrade] = useState('');
+    const [filterStatus, setFilterStatus] = useState('enrolled');
 
-    // Search Student State
     const [studentSearch, setStudentSearch] = useState('');
     const [showStudentResults, setShowStudentResults] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState(null);
 
-    // ✅ Eligibility State
     const [eligibility, setEligibility] = useState(null);
     const [loadingEligibility, setLoadingEligibility] = useState(false);
 
@@ -129,7 +128,7 @@ const Enrollments = () => {
         });
         setStudentSearch(`${item.first_name} ${item.middle_name || ''} ${item.last_name}`);
         setShowStudentResults(false);
-        setEligibility(null); // Hide eligibility during edit
+        setEligibility(null);
         setFormData({
             student_id: item.student_id || '',
             grade_level: item.grade_level || '',
@@ -142,29 +141,24 @@ const Enrollments = () => {
         setMessage({ type: '', text: '' });
     };
 
-    // ✅ Select Student + Fetch Eligibility
     const handleSelectStudent = async (student) => {
         setSelectedStudent(student);
         setStudentSearch(`${student.first_name} ${student.middle_name || ''} ${student.last_name}`);
         setShowStudentResults(false);
         setFormData(prev => ({ ...prev, student_id: student.student_id }));
 
-        // Fetch eligibility
         setLoadingEligibility(true);
         try {
             const res = await API.get(`/registrar/enrollment-eligibility/${student.student_id}`);
             setEligibility(res.data);
             console.log('✅ Eligibility:', res.data);
 
-            // Auto-suggest next grade level
             if (res.data.nextGradeLevel) {
                 setFormData(prev => ({ ...prev, grade_level: res.data.nextGradeLevel }));
             }
 
-            // Auto-set school year
             if (res.data.latestEnrollment?.school_year) {
                 const lastYear = res.data.latestEnrollment.school_year;
-                // Increment year (e.g., 2026-2027 → 2027-2028)
                 const parts = lastYear.split('-');
                 if (parts.length === 2) {
                     const startYear = parseInt(parts[0]) + 1;
@@ -198,7 +192,6 @@ const Enrollments = () => {
             return;
         }
 
-        // ✅ Warning kung retained pero nag-enroll sa higher grade
         if (eligibility?.eligibility === 'RETAINED' && eligibility.nextGradeLevel) {
             const shouldProceed = window.confirm(
                 `⚠️ WARNING: Ang student kay "${eligibility.eligibility}" base sa iyang grades.\n\n` +
@@ -209,7 +202,6 @@ const Enrollments = () => {
             if (!shouldProceed) return;
         }
 
-        // ✅ Warning kung graduated na
         if (eligibility?.eligibility === 'GRADUATED') {
             const shouldProceed = window.confirm(
                 `🎓 WARNING: Graduated na ang student.\n\n` +
@@ -261,9 +253,11 @@ const Enrollments = () => {
         ? sections.filter(s => s.grade_level === formData.grade_level && s.status === 'active')
         : sections.filter(s => s.status === 'active');
 
-    const filtered = filterGrade
-        ? enrollments.filter(e => e.grade_level === filterGrade)
-        : enrollments;
+    const filtered = enrollments.filter(e => {
+        const matchesGrade = !filterGrade || e.grade_level === filterGrade;
+        const matchesStatus = filterStatus === 'all' || e.status === filterStatus;
+        return matchesGrade && matchesStatus;
+    });
 
     const filteredStudents = students.filter(s => {
         if (!studentSearch.trim()) return true;
@@ -273,36 +267,33 @@ const Enrollments = () => {
         return fullName.includes(search) || publicId.includes(search);
     });
 
+    // ✅ UPDATED: Added Honor Students menu
     const menuItems = [
         { id: 'applications', icon: '📋', label: 'Applications', type: 'link', path: '/registrar/dashboard' },
         { id: 'enrolled', icon: '🎓', label: 'Enrolled Students', type: 'link', path: '/registrar/dashboard' },
         { id: 'sections', icon: '🏫', label: 'Sections', type: 'link', path: '/registrar/sections' },
         { id: 'subjects', icon: '📚', label: 'Subjects', type: 'link', path: '/registrar/subjects' },
         { id: 'enrollments', icon: '📝', label: 'Enrollments', type: 'link', path: '/registrar/enrollments' },
+        { id: 'reenrollment', icon: '🔄', label: 'Re-enrollment', type: 'link', path: '/registrar/re-enrollment-requests' },
         { id: 'grades', icon: '📊', label: 'Grades', type: 'link', path: '/registrar/grades' },
         { id: 'remarks', icon: '💬', label: 'Remarks', type: 'link', path: '/registrar/remarks' },
+        { id: 'honor-students', icon: '🏆', label: 'Honor Students', type: 'link', path: '/registrar/honor-students' },
+        { id: 'student-history', icon: '📚', label: 'Student History', type: 'link', path: '/registrar/student-history' },
         { id: 'settings', icon: '⚙️', label: 'Settings', type: 'link', path: '/registrar/dashboard' }
     ];
 
     const currentPage = 'enrollments';
 
     const inputStyle = {
-        width: '100%',
-        padding: '10px 14px',
-        border: '1px solid #d1d5db',
-        borderRadius: '8px',
-        fontSize: '14px',
-        marginTop: '4px',
-        outline: 'none',
-        boxSizing: 'border-box'
+        width: '100%', padding: '10px 14px',
+        border: '1px solid #d1d5db', borderRadius: '8px',
+        fontSize: '14px', marginTop: '4px',
+        outline: 'none', boxSizing: 'border-box'
     };
 
     const labelStyle = {
-        display: 'block',
-        fontSize: '13px',
-        fontWeight: '600',
-        color: '#374151',
-        marginBottom: '4px'
+        display: 'block', fontSize: '13px', fontWeight: '600',
+        color: '#374151', marginBottom: '4px'
     };
 
     const statusColor = (status) => {
@@ -317,7 +308,6 @@ const Enrollments = () => {
         return colors[status] || colors.enrolled;
     };
 
-    // ✅ Eligibility Card colors
     const eligibilityStyle = (type) => {
         const colors = {
             ELIGIBLE: { bg: '#d1fae5', color: '#065f46', border: '#34d399', icon: '✅', label: 'Eligible for Next Grade' },
@@ -359,7 +349,7 @@ const Enrollments = () => {
                         <div>
                             <span style={{ fontSize: '18px', fontWeight: '800', color: '#1f2937' }}>NCDC</span>
                             <br />
-                            <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Registrar Panel</span>
+                            <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Teacher Panel</span>
                         </div>
                     </div>
                 </div>
@@ -383,14 +373,14 @@ const Enrollments = () => {
                         {profilePic ? (
                             <img src={profilePic} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : (
-                            user?.username?.charAt(0).toUpperCase() || 'R'
+                            user?.username?.charAt(0).toUpperCase() || 'T'
                         )}
                     </div>
                     <div>
                         <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
-                            {user?.username || 'Registrar'}
+                            {user?.username || 'Teacher'}
                         </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>Registrar</div>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>Teacher / Staff</div>
                     </div>
                 </Link>
 
@@ -509,23 +499,56 @@ const Enrollments = () => {
                 <div style={{
                     background: 'white', padding: '16px 20px', borderRadius: '12px',
                     marginBottom: '24px', border: '1px solid #e5e7eb',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                    display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center'
                 }}>
-                    <label style={{ marginRight: '10px', fontWeight: '600', color: '#374151', fontSize: '14px' }}>
-                        Filter by Grade:
-                    </label>
-                    <select
-                        value={filterGrade}
-                        onChange={(e) => setFilterGrade(e.target.value)}
-                        style={{
-                            padding: '8px 14px', borderRadius: '8px',
-                            border: '1px solid #d1d5db', fontSize: '14px',
-                            minWidth: '160px', outline: 'none'
-                        }}
-                    >
-                        <option value="">All Grades</option>
-                        {gradeLevels.map(g => <option key={g} value={g}>{g}</option>)}
-                    </select>
+                    <div>
+                        <label style={{ marginRight: '10px', fontWeight: '600', color: '#374151', fontSize: '14px' }}>
+                            Filter by Grade:
+                        </label>
+                        <select
+                            value={filterGrade}
+                            onChange={(e) => setFilterGrade(e.target.value)}
+                            style={{
+                                padding: '8px 14px', borderRadius: '8px',
+                                border: '1px solid #d1d5db', fontSize: '14px',
+                                minWidth: '160px', outline: 'none'
+                            }}
+                        >
+                            <option value="">All Grades</option>
+                            {gradeLevels.map(g => <option key={g} value={g}>{g}</option>)}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label style={{ marginRight: '10px', fontWeight: '600', color: '#374151', fontSize: '14px' }}>
+                            Filter by Status:
+                        </label>
+                        <select
+                            value={filterStatus}
+                            onChange={(e) => setFilterStatus(e.target.value)}
+                            style={{
+                                padding: '8px 14px', borderRadius: '8px',
+                                border: '1px solid #d1d5db', fontSize: '14px',
+                                minWidth: '160px', outline: 'none',
+                                background: filterStatus === 'enrolled' ? '#dbeafe' : 'white',
+                                color: filterStatus === 'enrolled' ? '#1a56db' : '#374151',
+                                fontWeight: filterStatus === 'enrolled' ? '600' : '400'
+                            }}
+                        >
+                            <option value="enrolled">✅ Currently Enrolled</option>
+                            <option value="passed">🎓 Passed</option>
+                            <option value="failed">❌ Failed</option>
+                            <option value="dropped">⚠️ Dropped</option>
+                            <option value="transferred">➡️ Transferred</option>
+                            <option value="graduated">🎉 Graduated</option>
+                            <option value="all">📋 All Status</option>
+                        </select>
+                    </div>
+
+                    <div style={{ marginLeft: 'auto', fontSize: '13px', color: '#6b7280', fontWeight: '600' }}>
+                        📊 {filtered.length} {filtered.length === 1 ? 'record' : 'records'}
+                    </div>
                 </div>
 
                 <div style={{
@@ -534,10 +557,10 @@ const Enrollments = () => {
                 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                         <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1f2937' }}>
-                            📋 All Enrollments
+                            📋 {filterStatus === 'enrolled' ? 'Currently Enrolled' : filterStatus === 'all' ? 'All Enrollments' : `${filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1)} Enrollments`}
                         </h3>
                         <span style={{ fontSize: '13px', color: '#6b7280' }}>
-                            {filtered.length} enrollments
+                            {filtered.length} {filtered.length === 1 ? 'enrollment' : 'enrollments'}
                         </span>
                     </div>
 
@@ -548,7 +571,9 @@ const Enrollments = () => {
                     ) : filtered.length === 0 ? (
                         <div style={{ textAlign: 'center', padding: '60px', color: '#6b7280' }}>
                             <div style={{ fontSize: '48px', marginBottom: '8px' }}>🎉</div>
-                            No enrollments found. Click "Enroll Student" to add one.
+                            {filterStatus === 'enrolled'
+                                ? 'No currently enrolled students. Click "Enroll Student" to add one.'
+                                : `No enrollments with status "${filterStatus}".`}
                         </div>
                     ) : (
                         <div style={{ overflowX: 'auto' }}>
@@ -663,7 +688,6 @@ const Enrollments = () => {
                             }}>{message.text}</div>
                         )}
 
-                        {/* SEARCH STUDENT */}
                         <div style={{ marginBottom: '15px', position: 'relative' }}>
                             <label style={labelStyle}>Student *</label>
                             <div style={{ position: 'relative' }}>
@@ -704,7 +728,6 @@ const Enrollments = () => {
                                 )}
                             </div>
 
-                            {/* Search results dropdown */}
                             {showStudentResults && studentSearch && !selectedStudent && !editingItem && (
                                 <div style={{
                                     position: 'absolute',
@@ -751,7 +774,6 @@ const Enrollments = () => {
                             )}
                         </div>
 
-                        {/* Click-away overlay */}
                         {showStudentResults && studentSearch && !selectedStudent && !editingItem && (
                             <div
                                 onClick={() => setShowStudentResults(false)}
@@ -762,7 +784,6 @@ const Enrollments = () => {
                             />
                         )}
 
-                        {/* ✅ ELIGIBILITY CARD */}
                         {loadingEligibility && (
                             <div style={{
                                 padding: '20px', background: '#f9fafb',
@@ -803,7 +824,6 @@ const Enrollments = () => {
                                     </div>
                                 </div>
 
-                                {/* Previous enrollment info */}
                                 {eligibility.latestEnrollment && (
                                     <div style={{
                                         marginTop: '12px',
@@ -848,7 +868,6 @@ const Enrollments = () => {
                                     </div>
                                 )}
 
-                                {/* Suggested next grade */}
                                 {eligibility.nextGradeLevel && (
                                     <div style={{
                                         marginTop: '12px',

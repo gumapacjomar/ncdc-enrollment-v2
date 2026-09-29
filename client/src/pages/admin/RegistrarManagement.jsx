@@ -34,7 +34,7 @@ const RegistrarManagement = () => {
       setRegistrars(response.data);
     } catch (error) {
       console.error('Error fetching registrars:', error);
-      setMessage({ type: 'error', text: 'Failed to load registrars' });
+      setMessage({ type: 'error', text: 'Failed to load teachers' });
     } finally {
       setLoading(false);
     }
@@ -68,10 +68,10 @@ const RegistrarManagement = () => {
     try {
       if (editingRegistrar) {
         await API.put(`/admin/registrars/${editingRegistrar.id}`, formData);
-        setMessage({ type: 'success', text: '✅ Registrar updated successfully!' });
+        setMessage({ type: 'success', text: '✅ Teacher updated successfully!' });
       } else {
         await API.post('/admin/registrars', formData);
-        setMessage({ type: 'success', text: '✅ Registrar created successfully!' });
+        setMessage({ type: 'success', text: '✅ Teacher created successfully!' });
       }
       
       resetForm();
@@ -87,14 +87,14 @@ const RegistrarManagement = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this registrar?')) return;
+    if (!window.confirm('Are you sure you want to delete this teacher?')) return;
     
     try {
       await API.delete(`/admin/registrars/${id}`);
-      setMessage({ type: 'success', text: '✅ Registrar deleted successfully!' });
+      setMessage({ type: 'success', text: '✅ Teacher deleted successfully!' });
       fetchRegistrars();
     } catch (error) {
-      setMessage({ type: 'error', text: '❌ Failed to delete registrar' });
+      setMessage({ type: 'error', text: '❌ Failed to delete teacher' });
     }
   };
 
@@ -134,7 +134,7 @@ const RegistrarManagement = () => {
     const padded = String(nextNum).padStart(6, '0');
     setFormData(prev => ({
       ...prev,
-      employeeId: `REG-${padded}`
+      employeeId: `TCH-${padded}`
     }));
   };
 
@@ -159,9 +159,9 @@ const RegistrarManagement = () => {
           gap: '12px'
         }}>
           <div>
-            <h1 style={{ fontSize: '28px', color: '#1f2937', margin: 0 }}>👨‍💼 Registrar Management</h1>
+            <h1 style={{ fontSize: '28px', color: '#1f2937', margin: 0 }}>👨‍💼 Teacher Management</h1>
             <p style={{ color: '#6b7280', fontSize: '14px', margin: '4px 0 0' }}>
-              Manage registrar accounts
+              Manage teacher accounts
             </p>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
@@ -203,7 +203,7 @@ const RegistrarManagement = () => {
               onMouseEnter={(e) => e.target.style.background = '#1e40af'}
               onMouseLeave={(e) => e.target.style.background = '#1a56db'}
             >
-              + Add Registrar
+              + Add Teacher
             </button>
           </div>
         </div>
@@ -226,11 +226,11 @@ const RegistrarManagement = () => {
         <div style={cardStyle}>
           {loading ? (
             <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
-              ⏳ Loading registrars...
+              ⏳ Loading teachers...
             </div>
           ) : registrars.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
-              No registrars found. Click "Add Registrar" to create one.
+              No teachers found. Click "Add Teacher" to create one.
             </div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
@@ -323,7 +323,7 @@ const RegistrarManagement = () => {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h2 style={{ fontSize: '22px', color: '#1f2937' }}>
-                {editingRegistrar ? '✏️ Edit Registrar' : '➕ Add Registrar'}
+                {editingRegistrar ? '✏️ Edit Teacher' : '➕ Add Teacher'}
               </h2>
               <button
                 onClick={resetForm}
@@ -356,7 +356,7 @@ const RegistrarManagement = () => {
                     name="employeeId"
                     value={formData.employeeId}
                     onChange={handleChange}
-                    placeholder="REG-000001"
+                    placeholder="TCH-000001"
                     required
                     style={{
                       flex: 1,
@@ -382,7 +382,7 @@ const RegistrarManagement = () => {
                   </button>
                 </div>
                 <small style={{ color: '#6b7280', fontSize: '12px' }}>
-                  Format: REG-000001 (6 digits)
+                  Format: TCH-000001 (6 digits)
                 </small>
               </div>
 
@@ -521,7 +521,7 @@ const RegistrarManagement = () => {
                     }}
                   />
                   <small style={{ color: '#6b7280', fontSize: '12px' }}>
-                    Registrar will use this to login
+                    Teacher will use this to login
                   </small>
                 </div>
               )}
@@ -541,7 +541,7 @@ const RegistrarManagement = () => {
                     cursor: actionLoading ? 'not-allowed' : 'pointer'
                   }}
                 >
-                  {actionLoading ? 'Saving...' : editingRegistrar ? 'Update Registrar' : 'Create Registrar'}
+                  {actionLoading ? 'Saving...' : editingRegistrar ? 'Update Teacher' : 'Create Teacher'}
                 </button>
                 <button
                   type="button"

@@ -154,11 +154,11 @@ const AdminProfile = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#1a56db' }}>🎓 NCDC</span>
           <span style={{ color: '#6b7280' }}>|</span>
-          <span style={{ color: '#6b7280', fontWeight: '500' }}>Admin Profile</span>
+          <span style={{ color: '#6b7280', fontWeight: '500' }}>Principal Profile</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <span style={{ fontSize: '14px', color: '#374151' }}>
-            👋 {user?.username || 'Admin'}
+            👋 {user?.username || 'Principal'}
           </span>
           <button
             onClick={() => {
@@ -296,7 +296,7 @@ const AdminProfile = () => {
                 {admin?.first_name} {admin?.last_name}
               </h2>
               <p style={{ color: '#6b7280', margin: '4px 0 0' }}>
-                {admin?.employee_id || 'Admin'} • {admin?.role?.charAt(0).toUpperCase() + admin?.role?.slice(1) || 'Admin'}
+                {admin?.employee_id || 'Principal'} • {admin?.role === 'admin' ? 'Principal' : (admin?.role?.charAt(0).toUpperCase() + admin?.role?.slice(1) || 'Principal')}
               </p>
             </div>
           </div>
@@ -431,7 +431,7 @@ const AdminProfile = () => {
                   </label>
                   <input
                     type="text"
-                    value={admin?.role?.charAt(0).toUpperCase() + admin?.role?.slice(1) || 'Admin'}
+                    value={admin?.role === 'admin' ? 'Principal' : (admin?.role?.charAt(0).toUpperCase() + admin?.role?.slice(1) || 'Principal')}
                     disabled
                     style={{
                       width: '100%',

@@ -328,7 +328,7 @@ const GradeReports = () => {
                         <div>
                             <span style={{ fontSize: '20px', fontWeight: '800', color: '#1f2937' }}>NCDC</span>
                             <br />
-                            <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Admin Panel</span>
+                            <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Principal Panel</span>
                         </div>
                     </div>
                 </div>
@@ -352,14 +352,14 @@ const GradeReports = () => {
                         {profilePic ? (
                             <img src={profilePic} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : (
-                            user?.username?.charAt(0).toUpperCase() || 'A'
+                            user?.username?.charAt(0).toUpperCase() || 'P'
                         )}
                     </div>
                     <div>
                         <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
-                            {user?.username || 'Admin'}
+                            {user?.username || 'Principal'}
                         </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>Administrator</div>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>Principal</div>
                     </div>
                 </Link>
 
