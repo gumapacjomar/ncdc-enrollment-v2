@@ -192,12 +192,15 @@ const Enrollments = () => {
             return;
         }
 
-        if (eligibility?.eligibility === 'RETAINED' && eligibility.nextGradeLevel) {
+        // ✅ NEW: Simplified warning — FAILED status
+        if (eligibility?.eligibility === 'FAILED') {
             const shouldProceed = window.confirm(
-                `⚠️ WARNING: Ang student kay "${eligibility.eligibility}" base sa iyang grades.\n\n` +
-                `Recommended: ${eligibility.nextGradeLevel}\n` +
+                `⚠️ WARNING: May bagsak ang student!\n\n` +
+                `${eligibility.message}\n\n` +
+                `Dapat i-retain sa same grade level.\n` +
+                `Recommend: ${eligibility.nextGradeLevel || 'Same Grade'}\n` +
                 `Napili nimo: ${formData.grade_level}\n\n` +
-                `Gusto ba nimo i-proceed?`
+                `Gusto ba nimo i-proceed gihapon?`
             );
             if (!shouldProceed) return;
         }
@@ -267,7 +270,6 @@ const Enrollments = () => {
         return fullName.includes(search) || publicId.includes(search);
     });
 
-    // ✅ UPDATED: Added Honor Students menu
     const menuItems = [
         { id: 'applications', icon: '📋', label: 'Applications', type: 'link', path: '/registrar/dashboard' },
         { id: 'enrolled', icon: '🎓', label: 'Enrolled Students', type: 'link', path: '/registrar/dashboard' },
@@ -308,10 +310,11 @@ const Enrollments = () => {
         return colors[status] || colors.enrolled;
     };
 
+    // ✅ UPDATED: Simplified eligibility styles
     const eligibilityStyle = (type) => {
         const colors = {
             ELIGIBLE: { bg: '#d1fae5', color: '#065f46', border: '#34d399', icon: '✅', label: 'Eligible for Next Grade' },
-            RETAINED: { bg: '#fef3c7', color: '#92400e', border: '#f59e0b', icon: '⚠️', label: 'Retained (Failed)' },
+            FAILED: { bg: '#fee2e2', color: '#991b1b', border: '#fca5a5', icon: '❌', label: 'Failed — Retain' },
             CURRENTLY_ENROLLED: { bg: '#dbeafe', color: '#1a56db', border: '#60a5fa', icon: 'ℹ️', label: 'Currently Enrolled' },
             GRADUATED: { bg: '#e0e7ff', color: '#4338ca', border: '#818cf8', icon: '🎓', label: 'Graduated' },
             NOT_ELIGIBLE: { bg: '#fee2e2', color: '#991b1b', border: '#fca5a5', icon: '❌', label: 'Not Eligible' },

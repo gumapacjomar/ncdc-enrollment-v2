@@ -2313,11 +2313,105 @@ app.delete('/api/registrar/enrollments/:id', (req, res) => {
 // =============================================
 // 48b. ENROLLMENTS - Get Eligibility for Next Grade
 // =============================================
+// ✅ UPDATED: Simplified promotion policy — ANY term < 75 = FAILED (Retain)
+// No conditional promotion. No core/non-core distinction.
+// =============================================
+
+const OLD_QUARTERS = ['1st Quarter', '2nd Quarter', '3rd Quarter', '4th Quarter'];
+const NEW_TERMS = ['Term 1', 'Term 2', 'Term 3'];
+
+const TERM_SHORT_MAP = {
+    '1st Quarter': 'Q1',
+    '2nd Quarter': 'Q2',
+    '3rd Quarter': 'Q3',
+    '4th Quarter': 'Q4',
+    'Term 1': 'T1',
+    'Term 2': 'T2',
+    'Term 3': 'T3'
+};
+
+// Detect OLD (Q1-Q4) vs NEW (Term 1-3) grading system
+const detectGradingSystem = (gradeList) => {
+    if (!gradeList || gradeList.length === 0) {
+        return { isOldSystem: false, terms: NEW_TERMS };
+    }
+    const hasOldQuarters = gradeList.some(
+        (g) => g.quarter && g.quarter.toLowerCase().includes('quarter')
+    );
+    return hasOldQuarters
+        ? { isOldSystem: true, terms: OLD_QUARTERS }
+        : { isOldSystem: false, terms: NEW_TERMS };
+};
+
+// Build subject averages + flag ANY failing term (<75) per subject
+const buildSubjectAverages = (gradeList) => {
+    if (!gradeList || gradeList.length === 0) return [];
+
+    const detection = detectGradingSystem(gradeList);
+    const expectedTerms = detection.terms;
+
+    // Group by subject
+    const bySubject = {};
+    gradeList.forEach((g) => {
+        const key = g.subject;
+        if (!bySubject[key]) {
+            bySubject[key] = {
+                subject: g.subject,
+                termMap: {},
+                remarks: ''
+            };
+        }
+        const term = g.quarter || g.term;
+        const val = parseFloat(g.grade);
+        if (term) bySubject[key].termMap[term] = val;
+        if (g.remarks) bySubject[key].remarks = g.remarks;
+    });
+
+    return Object.values(bySubject).map((subj) => {
+        // Only use expected terms for average (ignore missing = excluded)
+        const presentValues = expectedTerms
+            .map((t) => subj.termMap[t])
+            .filter((v) => !isNaN(v) && v > 0);
+
+        const finalAve =
+            presentValues.length > 0
+                ? parseFloat(
+                      (
+                          presentValues.reduce((a, b) => a + b, 0) /
+                          presentValues.length
+                      ).toFixed(2)
+                  )
+                : 0;
+
+        // ✅ NEW POLICY: flag ANY term below 75
+        const failingTerms = [];
+        expectedTerms.forEach((term) => {
+            const val = subj.termMap[term];
+            if (!isNaN(val) && val > 0 && val < 75) {
+                failingTerms.push({
+                    term,
+                    short: TERM_SHORT_MAP[term] || term,
+                    value: val
+                });
+            }
+        });
+
+        return {
+            subject: subj.subject,
+            finalAve,
+            termMap: subj.termMap,
+            failingTerms,
+            hasFailingTerm: failingTerms.length > 0,
+            remarks: subj.remarks
+        };
+    });
+};
+
 app.get('/api/registrar/enrollment-eligibility/:studentId', (req, res) => {
     const { studentId } = req.params;
 
     const studentQuery = `SELECT id, student_id, first_name, middle_name, last_name, current_grade_level, enrollment_status FROM students WHERE id = ?`;
-    
+
     db.query(studentQuery, [studentId], (err, studentResults) => {
         if (err) return res.status(500).json({ error: err.message });
         if (studentResults.length === 0) {
@@ -2338,13 +2432,16 @@ app.get('/api/registrar/enrollment-eligibility/:studentId', (req, res) => {
         db.query(enrollQuery, [studentId], (err, enrollments) => {
             if (err) return res.status(500).json({ error: err.message });
 
-            const latestEnrollment = enrollments.length > 0 ? enrollments[0] : null;
+            const latestEnrollment =
+                enrollments.length > 0 ? enrollments[0] : null;
 
             if (!latestEnrollment) {
                 return res.json({
                     student: student,
                     latestEnrollment: null,
                     grades: [],
+                    subjectAverages: [],
+                    failingSubjects: [],
                     average: 0,
                     eligibility: 'NEW_STUDENT',
                     nextGradeLevel: student.current_grade_level || 'Grade 1',
@@ -2363,14 +2460,33 @@ app.get('/api/registrar/enrollment-eligibility/:studentId', (req, res) => {
             db.query(gradesQuery, [latestEnrollment.id], (err, grades) => {
                 if (err) return res.status(500).json({ error: err.message });
 
+                // ── Compute subject averages + failing term detection ──
+                const subjectAverages = buildSubjectAverages(grades);
+                const failingSubjects = subjectAverages.filter(
+                    (s) => s.hasFailingTerm
+                );
+
+                // ── Overall average (across ALL grade entries — display only) ──
                 let average = 0;
                 if (grades.length > 0) {
-                    const sum = grades.reduce((acc, g) => acc + parseFloat(g.grade || 0), 0);
+                    const sum = grades.reduce(
+                        (acc, g) => acc + parseFloat(g.grade || 0),
+                        0
+                    );
                     average = parseFloat((sum / grades.length).toFixed(2));
                 }
 
-                const gradeLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
-                const currentIdx = gradeLevels.indexOf(latestEnrollment.grade_level);
+                const gradeLevels = [
+                    'Grade 1',
+                    'Grade 2',
+                    'Grade 3',
+                    'Grade 4',
+                    'Grade 5',
+                    'Grade 6'
+                ];
+                const currentIdx = gradeLevels.indexOf(
+                    latestEnrollment.grade_level
+                );
                 const isGrade6 = latestEnrollment.grade_level === 'Grade 6';
 
                 let eligibility = 'PENDING';
@@ -2378,56 +2494,90 @@ app.get('/api/registrar/enrollment-eligibility/:studentId', (req, res) => {
                 let suggestedAction = 'ENROLL';
                 let message = '';
 
-                if (latestEnrollment.status === 'passed') {
-                    if (isGrade6) {
-                        eligibility = 'GRADUATED';
-                        nextGradeLevel = null;
-                        suggestedAction = 'GRADUATE';
-                        message = '✅ Grade 6 passed — Graduate na siya! Dili na ma-enroll sa higher grade.';
-                    } else {
-                        eligibility = 'ELIGIBLE';
-                        nextGradeLevel = gradeLevels[currentIdx + 1] || null;
-                        suggestedAction = 'ENROLL';
-                        message = `✅ Passed sa ${latestEnrollment.grade_level} — pwede i-enroll sa ${nextGradeLevel}.`;
-                    }
-                } else if (latestEnrollment.status === 'failed') {
-                    eligibility = 'RETAINED';
-                    nextGradeLevel = latestEnrollment.grade_level;
-                    suggestedAction = 'ENROLL';
-                    message = `⚠️ Failed sa ${latestEnrollment.grade_level} — kailangan i-retain (same grade) o i-review.`;
-                } else if (latestEnrollment.status === 'enrolled') {
-                    eligibility = 'CURRENTLY_ENROLLED';
-                    nextGradeLevel = latestEnrollment.grade_level;
-                    suggestedAction = 'VIEW';
-                    message = `ℹ️ Currently enrolled sa ${latestEnrollment.grade_level} (${latestEnrollment.school_year}).`;
-                } else if (latestEnrollment.status === 'dropped' || latestEnrollment.status === 'transferred') {
-                    eligibility = 'NOT_ELIGIBLE';
-                    nextGradeLevel = latestEnrollment.grade_level;
-                    suggestedAction = 'REVIEW';
-                    message = `⚠️ Status: ${latestEnrollment.status}. Kinahanglan i-review sa admin.`;
-                } else if (latestEnrollment.status === 'graduated') {
+                // ── ✅ NEW POLICY FIRST: check individual terms ──
+                const hasAnyFailingTerm = failingSubjects.length > 0;
+
+                // Special statuses override
+                if (latestEnrollment.status === 'graduated') {
                     eligibility = 'GRADUATED';
                     nextGradeLevel = null;
                     suggestedAction = 'GRADUATE';
                     message = '🎓 Graduated na siya. Dili na ma-enroll.';
-                } else {
-                    if (average >= 75) {
-                        eligibility = 'ELIGIBLE';
-                        nextGradeLevel = isGrade6 ? null : gradeLevels[currentIdx + 1];
-                        suggestedAction = isGrade6 ? 'GRADUATE' : 'ENROLL';
-                        message = `✅ Average ${average} (≥75) — pwede i-enroll sa ${nextGradeLevel || 'graduate'}.`;
-                    } else {
-                        eligibility = 'RETAINED';
+                } else if (
+                    latestEnrollment.status === 'dropped' ||
+                    latestEnrollment.status === 'transferred'
+                ) {
+                    eligibility = 'NOT_ELIGIBLE';
+                    nextGradeLevel = latestEnrollment.grade_level;
+                    suggestedAction = 'REVIEW';
+                    message = `⚠️ Status: ${latestEnrollment.status}. Kinahanglan i-review sa admin.`;
+                } else if (latestEnrollment.status === 'enrolled') {
+                    // Still enrolled — check kung naay failing terms
+                    if (hasAnyFailingTerm) {
+                        eligibility = 'FAILED';
                         nextGradeLevel = latestEnrollment.grade_level;
-                        suggestedAction = 'ENROLL';
-                        message = `⚠️ Average ${average} (<75) — kailangan i-retain.`;
+                        suggestedAction = 'RETAIN';
+                        const detail = failingSubjects
+                            .map(
+                                (s) =>
+                                    `${s.subject} (${s.failingTerms
+                                        .map(
+                                            (ft) =>
+                                                `${ft.short}: ${ft.value.toFixed(
+                                                    2
+                                                )}`
+                                        )
+                                        .join(', ')})`
+                            )
+                            .join('; ');
+                        message = `❌ FAILED — Subject(s) with term below 75: ${detail}. Kailangan i-RETAIN sa ${latestEnrollment.grade_level}.`;
+                    } else {
+                        eligibility = 'CURRENTLY_ENROLLED';
+                        nextGradeLevel = latestEnrollment.grade_level;
+                        suggestedAction = 'VIEW';
+                        message = `ℹ️ Currently enrolled sa ${latestEnrollment.grade_level} (${latestEnrollment.school_year}).`;
                     }
+                } else if (hasAnyFailingTerm) {
+                    // ❌ FAILED — naay term below 75 bisan unsa ka subject
+                    eligibility = 'FAILED';
+                    nextGradeLevel = latestEnrollment.grade_level;
+                    suggestedAction = 'RETAIN';
+                    const detail = failingSubjects
+                        .map(
+                            (s) =>
+                                `${s.subject} (${s.failingTerms
+                                    .map(
+                                        (ft) =>
+                                            `${ft.short}: ${ft.value.toFixed(2)}`
+                                    )
+                                    .join(', ')})`
+                        )
+                        .join('; ');
+                    message = `❌ FAILED — Subject(s) with term below 75: ${detail}. Kailangan i-RETAIN sa ${latestEnrollment.grade_level}.`;
+                } else if (isGrade6) {
+                    // ✅ No failing terms + Grade 6 = Graduate
+                    eligibility = 'GRADUATED';
+                    nextGradeLevel = null;
+                    suggestedAction = 'GRADUATE';
+                    message = `🎓 Grade 6 passed — Graduate na siya! (Ave: ${average})`;
+                } else {
+                    // ✅ PROMOTED — walay failing term, dili Grade 6
+                    eligibility = 'PROMOTED';
+                    nextGradeLevel = gradeLevels[currentIdx + 1] || null;
+                    suggestedAction = 'ENROLL';
+                    message = `✅ PROMOTED — All terms passed (Ave: ${average}). Pwede i-enroll sa ${nextGradeLevel}.`;
                 }
 
                 res.json({
                     student: student,
                     latestEnrollment: latestEnrollment,
                     grades: grades,
+                    subjectAverages: subjectAverages,
+                    failingSubjects: failingSubjects.map((s) => ({
+                        subject: s.subject,
+                        finalAve: s.finalAve,
+                        failingTerms: s.failingTerms
+                    })),
                     average: average,
                     eligibility: eligibility,
                     nextGradeLevel: nextGradeLevel,
@@ -2560,8 +2710,74 @@ app.post('/api/admin/graduate-student/:studentId', (req, res) => {
 });
 
 // =============================================
-// 48d. RE-ENROLLMENT - Student Apply for Next Grade
+// 48d. RE-ENROLLMENT - Student Apply (Promote OR Retain)
 // =============================================
+// ✅ UPDATED: Detects failing terms per subject (ANY term < 75 = FAILED)
+//   - FAILED  → next_grade_level = SAME grade (RETAIN)
+//   - PROMOTED → next_grade_level = NEXT grade
+// =============================================
+
+const OLD_QUARTERS_RE = ['1st Quarter', '2nd Quarter', '3rd Quarter', '4th Quarter'];
+const NEW_TERMS_RE = ['Term 1', 'Term 2', 'Term 3'];
+
+const detectGradingSystemRE = (gradeList) => {
+    if (!gradeList || gradeList.length === 0) {
+        return { isOldSystem: false, terms: NEW_TERMS_RE };
+    }
+    const hasOldQuarters = gradeList.some(
+        (g) => g.quarter && g.quarter.toLowerCase().includes('quarter')
+    );
+    return hasOldQuarters
+        ? { isOldSystem: true, terms: OLD_QUARTERS_RE }
+        : { isOldSystem: false, terms: NEW_TERMS_RE };
+};
+
+const buildSubjectAveragesRE = (gradeList) => {
+    if (!gradeList || gradeList.length === 0) return [];
+
+    const detection = detectGradingSystemRE(gradeList);
+    const expectedTerms = detection.terms;
+
+    const bySubject = {};
+    gradeList.forEach((g) => {
+        const key = g.subject;
+        if (!bySubject[key]) {
+            bySubject[key] = { subject: g.subject, termMap: {} };
+        }
+        const term = g.quarter || g.term;
+        const val = parseFloat(g.grade);
+        if (term) bySubject[key].termMap[term] = val;
+    });
+
+    return Object.values(bySubject).map((subj) => {
+        const presentValues = expectedTerms
+            .map((t) => subj.termMap[t])
+            .filter((v) => !isNaN(v) && v > 0);
+
+        const finalAve = presentValues.length > 0
+            ? parseFloat(
+                  (presentValues.reduce((a, b) => a + b, 0) / presentValues.length).toFixed(2)
+              )
+            : 0;
+
+        const failingTerms = [];
+        expectedTerms.forEach((term) => {
+            const val = subj.termMap[term];
+            if (!isNaN(val) && val > 0 && val < 75) {
+                failingTerms.push({ term, value: val });
+            }
+        });
+
+        return {
+            subject: subj.subject,
+            finalAve,
+            termMap: subj.termMap,
+            failingTerms,
+            hasFailingTerm: failingTerms.length > 0
+        };
+    });
+};
+
 app.post('/api/student/reenrollment/apply', (req, res) => {
     const { student_id, current_enrollment_id, remarks } = req.body;
 
@@ -2586,8 +2802,8 @@ app.post('/api/student/reenrollment/apply', (req, res) => {
         const enrollment = results[0];
 
         if (enrollment.status !== 'passed' && enrollment.status !== 'enrolled') {
-            return res.status(400).json({ 
-                error: `Dili pwede mag-apply. Current status: ${enrollment.status}. Kinahanglan 'passed' o 'enrolled'.` 
+            return res.status(400).json({
+                error: `Dili pwede mag-apply. Current status: ${enrollment.status}. Kinahanglan 'passed' o 'enrolled'.`
             });
         }
 
@@ -2602,55 +2818,120 @@ app.post('/api/student/reenrollment/apply', (req, res) => {
                 return res.status(400).json({ error: 'Naa nay pending re-enrollment request. Please wait for approval.' });
             }
 
+            // ── Fetch ALL grades para ma-detect ang failing terms ──
             const gradesQuery = `
-                SELECT AVG(grade) as average
+                SELECT id, subject, grade, quarter, remarks
                 FROM grades
                 WHERE enrollment_id = ?
+                ORDER BY subject, quarter
             `;
 
-            db.query(gradesQuery, [current_enrollment_id], (err, gradeResults) => {
+            db.query(gradesQuery, [current_enrollment_id], (err, allGrades) => {
                 if (err) return res.status(500).json({ error: err.message });
 
-                const average = gradeResults[0].average ? parseFloat(gradeResults[0].average).toFixed(2) : null;
+                // Compute average (display only)
+                const average = allGrades.length > 0
+                    ? parseFloat(
+                          (allGrades.reduce((acc, g) => acc + parseFloat(g.grade || 0), 0) /
+                              allGrades.length).toFixed(2)
+                      )
+                    : null;
+
+                // ✅ Detect FAILED vs PROMOTED
+                const subjectAves = buildSubjectAveragesRE(allGrades);
+                const failingSubjects = subjectAves.filter((s) => s.hasFailingTerm);
+                const isRetained = failingSubjects.length > 0;
 
                 const gradeLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
                 const currentIdx = gradeLevels.indexOf(enrollment.grade_level);
-                const nextGrade = gradeLevels[currentIdx + 1] || null;
 
-                if (!nextGrade) {
-                    return res.status(400).json({ error: 'Grade 6 na — graduate na, dili na pwede mag-re-enroll.' });
+                // ✅ TARGET GRADE: RETAIN = SAME, PROMOTE = NEXT
+                let targetGrade;
+                if (isRetained) {
+                    targetGrade = enrollment.grade_level; // Grade 1 → Grade 1
+                } else {
+                    targetGrade = gradeLevels[currentIdx + 1] || null;
                 }
 
+                // Kung Grade 6 + PROMOTED = graduate, dili na re-enroll
+                if (!targetGrade) {
+                    return res.status(400).json({
+                        error: 'Grade 6 na — graduate na, dili na pwede mag-re-enroll.'
+                    });
+                }
+
+                // ── Next school year ──
+                // RETAIN: same SY? No — next SY gihapon (mag-retain sa Grade 1 for next school year)
                 const parts = enrollment.school_year.split('-');
-                const nextSY = parts.length === 2 
+                const nextSY = parts.length === 2
                     ? `${parseInt(parts[0]) + 1}-${parseInt(parts[1]) + 1}`
                     : enrollment.school_year;
 
+                // ── Build remarks ──
+                let finalRemarks = remarks || null;
+                if (isRetained) {
+                    const detail = failingSubjects
+                        .map((s) =>
+                            `${s.subject} (${s.failingTerms
+                                .map((ft) => `${ft.term}: ${ft.value.toFixed(2)}`)
+                                .join(', ')})`
+                        )
+                        .join('; ');
+                    finalRemarks =
+                        (remarks ? `${remarks} | ` : '') +
+                        `RETAIN — failing term(s): ${detail}`;
+                }
+
                 const insertQuery = `
-                    INSERT INTO reenrollment_requests 
-                    (student_id, current_grade_level, next_grade_level, 
+                    INSERT INTO reenrollment_requests
+                    (student_id, current_grade_level, next_grade_level,
                      current_school_year, next_school_year,
                      current_enrollment_id, average_grade, remarks, status)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
                 `;
 
-                db.query(insertQuery, [
-                    student_id, enrollment.grade_level, nextGrade,
-                    enrollment.school_year, nextSY,
-                    current_enrollment_id, average, remarks || null
-                ], (err, result) => {
-                    if (err) return res.status(500).json({ error: err.message });
+                db.query(
+                    insertQuery,
+                    [
+                        student_id,
+                        enrollment.grade_level,
+                        targetGrade,
+                        enrollment.school_year,
+                        nextSY,
+                        current_enrollment_id,
+                        average,
+                        finalRemarks
+                    ],
+                    (err, result) => {
+                        if (err) return res.status(500).json({ error: err.message });
 
-                    console.log('✅ Re-enrollment request created:', result.insertId);
-                    res.status(201).json({
-                        success: true,
-                        message: `✅ Application submitted for ${nextGrade} (SY ${nextSY})! Wait for registrar approval.`,
-                        id: result.insertId,
-                        nextGrade: nextGrade,
-                        nextSchoolYear: nextSY,
-                        average: average
-                    });
-                });
+                        console.log(
+                            `✅ Re-enrollment request created (${isRetained ? 'RETAIN' : 'PROMOTE'}):`,
+                            result.insertId
+                        );
+
+                        const responseMessage = isRetained
+                            ? `⚠️ RETENTION application submitted for ${targetGrade} (SY ${nextSY}). Naa kay failing term(s): ${failingSubjects
+                                  .map((s) => s.subject)
+                                  .join(', ')}. Wait for registrar approval.`
+                            : `✅ Application submitted for ${targetGrade} (SY ${nextSY})! Wait for registrar approval.`;
+
+                        res.status(201).json({
+                            success: true,
+                            message: responseMessage,
+                            id: result.insertId,
+                            isRetained: isRetained,
+                            nextGrade: targetGrade,
+                            nextSchoolYear: nextSY,
+                            average: average,
+                            failingSubjects: failingSubjects.map((s) => ({
+                                subject: s.subject,
+                                finalAve: s.finalAve,
+                                failingTerms: s.failingTerms
+                            }))
+                        });
+                    }
+                );
             });
         });
     });

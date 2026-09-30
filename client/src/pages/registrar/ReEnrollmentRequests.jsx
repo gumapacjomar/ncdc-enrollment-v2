@@ -23,6 +23,16 @@ const ReEnrollmentRequests = () => {
     const OLD_QUARTERS = ['1st Quarter', '2nd Quarter', '3rd Quarter', '4th Quarter'];
     const NEW_TERMS = ['Term 1', 'Term 2', 'Term 3'];
 
+    const TERM_SHORT_MAP = {
+        '1st Quarter': 'Q1',
+        '2nd Quarter': 'Q2',
+        '3rd Quarter': 'Q3',
+        '4th Quarter': 'Q4',
+        'Term 1': 'T1',
+        'Term 2': 'T2',
+        'Term 3': 'T3'
+    };
+
     const user = JSON.parse(localStorage.getItem('user'));
 
     useEffect(() => {
@@ -33,6 +43,7 @@ const ReEnrollmentRequests = () => {
             fetchProfile();
             fetchRequests();
         }
+        // eslint-disable-next-line
     }, [navigate]);
 
     const fetchProfile = async () => {
@@ -128,37 +139,56 @@ const ReEnrollmentRequests = () => {
         }
     };
 
+    // ─────────────────────────────────────────────────────────────
+    // HYBRID GRADING SYSTEM DETECTION
+    // ─────────────────────────────────────────────────────────────
     const detectSystem = (gradeList) => {
         if (!gradeList || gradeList.length === 0) {
-            return { isOldSystem: false, columns: NEW_TERMS, displayHeaders: ['Term 1', 'Term 2', 'Term 3'] };
+            return {
+                isOldSystem: false,
+                columns: NEW_TERMS,
+                displayHeaders: ['T1', 'T2', 'T3']
+            };
         }
 
-        const hasOldQuarters = gradeList.some(g => 
+        const hasOldQuarters = gradeList.some(g =>
             g.quarter && g.quarter.toLowerCase().includes('quarter')
         );
 
         if (hasOldQuarters) {
-            return { 
-                isOldSystem: true, 
-                columns: OLD_QUARTERS, 
-                displayHeaders: ['Q1', 'Q2', 'Q3', 'Q4'] 
+            return {
+                isOldSystem: true,
+                columns: OLD_QUARTERS,
+                displayHeaders: ['Q1', 'Q2', 'Q3', 'Q4']
             };
         }
 
-        return { 
-            isOldSystem: false, 
-            columns: NEW_TERMS, 
-            displayHeaders: ['Term 1', 'Term 2', 'Term 3'] 
+        return {
+            isOldSystem: false,
+            columns: NEW_TERMS,
+            displayHeaders: ['T1', 'T2', 'T3']
         };
     };
 
+    // ─────────────────────────────────────────────────────────────
+    // buildSubjectAverages
+    // → Groups grades by subject
+    // → Computes finalAve (only expected terms)
+    // → Flags hasFailingTerm if ANY term < 75
+    // → Returns failingTerms array for detail display
+    // ─────────────────────────────────────────────────────────────
     const buildSubjectAverages = (gradeList) => {
-        const subjectMap = {};
+        if (!gradeList || gradeList.length === 0) return [];
+
         const detection = detectSystem(gradeList);
+        const expectedTerms = detection.columns;
+
+        const bySubject = {};
 
         gradeList.forEach(g => {
-            if (!subjectMap[g.subject]) {
-                subjectMap[g.subject] = {
+            if (!bySubject[g.subject]) {
+                bySubject[g.subject] = {
+                    subject: g.subject,
                     q1: null, q2: null, q3: null, q4: null,
                     t1: null, t2: null, t3: null,
                     remarks: ''
@@ -168,35 +198,64 @@ const ReEnrollmentRequests = () => {
             const q = (g.quarter || '').toLowerCase();
             const gradeVal = parseFloat(g.grade);
 
-            if (q.includes('1st quarter')) subjectMap[g.subject].q1 = gradeVal;
-            else if (q.includes('2nd quarter')) subjectMap[g.subject].q2 = gradeVal;
-            else if (q.includes('3rd quarter')) subjectMap[g.subject].q3 = gradeVal;
-            else if (q.includes('4th quarter')) subjectMap[g.subject].q4 = gradeVal;
-            else if (q === 'term 1') subjectMap[g.subject].t1 = gradeVal;
-            else if (q === 'term 2') subjectMap[g.subject].t2 = gradeVal;
-            else if (q === 'term 3') subjectMap[g.subject].t3 = gradeVal;
+            if (q.includes('1st quarter')) bySubject[g.subject].q1 = gradeVal;
+            else if (q.includes('2nd quarter')) bySubject[g.subject].q2 = gradeVal;
+            else if (q.includes('3rd quarter')) bySubject[g.subject].q3 = gradeVal;
+            else if (q.includes('4th quarter')) bySubject[g.subject].q4 = gradeVal;
+            else if (q === 'term 1') bySubject[g.subject].t1 = gradeVal;
+            else if (q === 'term 2') bySubject[g.subject].t2 = gradeVal;
+            else if (q === 'term 3') bySubject[g.subject].t3 = gradeVal;
 
-            if (g.remarks) subjectMap[g.subject].remarks = g.remarks;
+            if (g.remarks) bySubject[g.subject].remarks = g.remarks;
         });
 
-        return Object.entries(subjectMap).map(([subject, data]) => {
-            let values = [];
+        return Object.entries(bySubject).map(([subject, data]) => {
+            const termMap = {};
+
             if (detection.isOldSystem) {
-                values = [data.q1, data.q2, data.q3, data.q4].filter(v => v !== null);
+                if (data.q1 !== null) termMap['1st Quarter'] = data.q1;
+                if (data.q2 !== null) termMap['2nd Quarter'] = data.q2;
+                if (data.q3 !== null) termMap['3rd Quarter'] = data.q3;
+                if (data.q4 !== null) termMap['4th Quarter'] = data.q4;
             } else {
-                values = [data.t1, data.t2, data.t3].filter(v => v !== null);
+                if (data.t1 !== null) termMap['Term 1'] = data.t1;
+                if (data.t2 !== null) termMap['Term 2'] = data.t2;
+                if (data.t3 !== null) termMap['Term 3'] = data.t3;
             }
 
+            // Only expected terms for average
+            const values = expectedTerms
+                .map(t => termMap[t])
+                .filter(v => v !== null && v !== undefined && !isNaN(v));
+
             const finalAve = values.length > 0
-                ? (values.reduce((a, b) => a + b, 0) / values.length).toFixed(2)
+                ? parseFloat((values.reduce((a, b) => a + b, 0) / values.length).toFixed(2))
                 : null;
+
+            // ✅ NEW POLICY: flag ANY term below 75
+            const failingTerms = [];
+            expectedTerms.forEach(term => {
+                const val = termMap[term];
+                if (val !== null && val !== undefined && !isNaN(val) && val < 75) {
+                    failingTerms.push({
+                        term,
+                        short: TERM_SHORT_MAP[term] || term,
+                        value: val
+                    });
+                }
+            });
+
+            const hasFailingTerm = failingTerms.length > 0;
 
             return {
                 subject,
                 q1: data.q1, q2: data.q2, q3: data.q3, q4: data.q4,
                 t1: data.t1, t2: data.t2, t3: data.t3,
+                termMap,
                 finalAve,
                 isOldSystem: detection.isOldSystem,
+                failingTerms,
+                hasFailingTerm,
                 remarks: data.remarks
             };
         });
@@ -217,14 +276,11 @@ const ReEnrollmentRequests = () => {
         return { bg: '#fee2e2', color: '#991b1b' };
     };
 
-    const isCoreSubject = (subjectName) => {
-        const name = (subjectName || '').toLowerCase();
-        return name.includes('filipino') ||
-               name.includes('english') ||
-               name.includes('math') ||
-               name.includes('science');
-    };
-
+    // ─────────────────────────────────────────────────────────────
+    // ✅ NEW ELIGIBILITY: checkEligibility uses hasFailingTerm
+    // FAILED if ANY subject has hasFailingTerm = true
+    // PROMOTED otherwise
+    // ─────────────────────────────────────────────────────────────
     const checkEligibility = (gradeList) => {
         if (gradeList.length === 0) {
             return {
@@ -235,77 +291,53 @@ const ReEnrollmentRequests = () => {
                 bgColor: '#f3f4f6',
                 borderColor: '#d1d5db',
                 icon: '❓',
-                label: 'NO DATA'
+                label: 'NO DATA',
+                failedSubjects: []
             };
         }
 
         const subjectAves = buildSubjectAverages(gradeList);
-        const failing = subjectAves.filter(s => s.finalAve && parseFloat(s.finalAve) < 75);
+        const failedSubjects = subjectAves.filter(s => s.hasFailingTerm);
 
-        if (failing.length === 0) {
-            const overall = calculateAverage(gradeList);
-            if (parseFloat(overall) >= 75) {
-                return {
-                    status: 'PROMOTED',
-                    eligible: true,
-                    reason: `All subjects passed (Ave: ${overall})`,
-                    color: '#065f46',
-                    bgColor: '#d1fae5',
-                    borderColor: '#34d399',
-                    icon: '✅',
-                    label: 'PROMOTED'
-                };
-            }
-        }
+        const overall = calculateAverage(gradeList);
 
-        const failingCore = failing.filter(f => isCoreSubject(f.subject));
-        const failingNonCore = failing.filter(f => !isCoreSubject(f.subject));
-
-        if (failingCore.length > 0 || failing.length >= 3) {
-            let reason = '';
-            if (failingCore.length > 0) {
-                reason = `Bagsak sa core subject(s): ${failingCore.map(f => f.subject).join(', ')}`;
-            } else {
-                reason = `${failing.length} failing subjects (3+ fails = retained)`;
-            }
+        // ✅ PROMOTED — walay bisan usa ka subject with failing term
+        if (failedSubjects.length === 0) {
             return {
-                status: 'RETAINED',
-                eligible: false,
-                reason,
-                color: '#991b1b',
-                bgColor: '#fee2e2',
-                borderColor: '#fca5a5',
-                icon: '❌',
-                label: 'RETAINED'
-            };
-        }
-
-        if (failingNonCore.length >= 1 && failingNonCore.length <= 2) {
-            return {
-                status: 'CONDITIONALLY_PROMOTED',
+                status: 'PROMOTED',
                 eligible: true,
-                reason: `${failingNonCore.length} failing non-core subject(s): ${failingNonCore.map(f => f.subject).join(', ')} — remedial required`,
-                color: '#92400e',
-                bgColor: '#fef3c7',
-                borderColor: '#f59e0b',
-                icon: '⚠️',
-                label: 'CONDITIONALLY PROMOTED'
+                reason: `All terms passed (Ave: ${overall})`,
+                color: '#065f46',
+                bgColor: '#d1fae5',
+                borderColor: '#34d399',
+                icon: '✅',
+                label: 'PROMOTED',
+                failedSubjects: []
             };
         }
+
+        // ❌ FAILED — naay bisan usa ka subject with term below 75
+        const detail = failedSubjects
+            .map(s =>
+                `${s.subject} (${s.failingTerms
+                    .map(ft => `${ft.short}: ${ft.value.toFixed(2)}`)
+                    .join(', ')})`
+            )
+            .join('; ');
 
         return {
-            status: 'RETAINED',
+            status: 'FAILED',
             eligible: false,
-            reason: `Average ${calculateAverage(gradeList)} < 75`,
+            reason: `❌ FAILED — Subject(s) with term below 75: ${detail}`,
             color: '#991b1b',
             bgColor: '#fee2e2',
             borderColor: '#fca5a5',
             icon: '❌',
-            label: 'RETAINED'
+            label: 'FAILED — RETAINED',
+            failedSubjects
         };
     };
 
-    // ✅ UPDATED: Added Honor Students menu
     const menuItems = [
         { id: 'applications', icon: '📋', label: 'Applications', type: 'link', path: '/registrar/dashboard' },
         { id: 'enrolled', icon: '🎓', label: 'Enrolled Students', type: 'link', path: '/registrar/dashboard' },
@@ -448,6 +480,14 @@ const ReEnrollmentRequests = () => {
                 )}
 
                 <div style={{
+                    background: '#fef3c7', padding: '14px 20px', borderRadius: '12px',
+                    marginBottom: '20px', border: '1px solid #f59e0b',
+                    fontSize: '13px', color: '#92400e'
+                }}>
+                    <strong>⚠️ Promotion Policy:</strong> Students with <em>ANY term below 75</em> must <strong>RETAIN</strong> in the same grade level. No conditional promotion.
+                </div>
+
+                <div style={{
                     background: 'white', padding: '24px', borderRadius: '14px',
                     border: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
                 }}>
@@ -588,8 +628,8 @@ const ReEnrollmentRequests = () => {
                                 return (
                                     <div style={{
                                         padding: '16px 20px',
-                                        background: elig.bgColor || (elig.eligible ? '#d1fae5' : '#fee2e2'),
-                                        border: `2px solid ${elig.borderColor || (elig.eligible ? '#34d399' : '#fca5a5')}`,
+                                        background: elig.bgColor,
+                                        border: `2px solid ${elig.borderColor}`,
                                         borderRadius: '12px',
                                         marginBottom: '20px'
                                     }}>
@@ -613,21 +653,7 @@ const ReEnrollmentRequests = () => {
                                             </div>
                                         </div>
 
-                                        {elig.status === 'CONDITIONALLY_PROMOTED' && (
-                                            <div style={{
-                                                marginTop: '12px',
-                                                padding: '10px 14px',
-                                                background: 'rgba(255,255,255,0.5)',
-                                                borderRadius: '8px',
-                                                fontSize: '12px',
-                                                color: '#92400e',
-                                                fontWeight: '600'
-                                            }}>
-                                                📌 DepEd Policy: Conditionally promoted students must complete remedial classes for failed non-core subjects.
-                                            </div>
-                                        )}
-
-                                        {elig.status === 'RETAINED' && (
+                                        {elig.status === 'FAILED' && (
                                             <div style={{
                                                 marginTop: '12px',
                                                 padding: '10px 14px',
@@ -637,7 +663,7 @@ const ReEnrollmentRequests = () => {
                                                 color: '#991b1b',
                                                 fontWeight: '600'
                                             }}>
-                                                📌 DepEd Policy: Retained students must re-enroll in the same grade level.
+                                                📌 Policy: Students with ANY term below 75 must RETAIN in the same grade level. No conditional promotion.
                                             </div>
                                         )}
                                     </div>
@@ -698,28 +724,23 @@ const ReEnrollmentRequests = () => {
                                             <tbody>
                                                 {subjectAves.map((subj, idx) => {
                                                     const gc = getGradeColor(subj.finalAve);
-                                                    const isFail = subj.finalAve && parseFloat(subj.finalAve) < 75;
-                                                    const isCore = isCoreSubject(subj.subject);
+                                                    const isFail = subj.hasFailingTerm;
 
                                                     const cellValues = detection.isOldSystem
                                                         ? [subj.q1, subj.q2, subj.q3, subj.q4]
                                                         : [subj.t1, subj.t2, subj.t3];
 
+                                                    const termKeys = detection.isOldSystem
+                                                        ? ['1st Quarter', '2nd Quarter', '3rd Quarter', '4th Quarter']
+                                                        : ['Term 1', 'Term 2', 'Term 3'];
+
                                                     return (
                                                         <tr key={idx} style={{
                                                             borderBottom: '1px solid #e5e7eb',
-                                                            background: isFail ? 'rgba(254,226,226,0.4)' : 'white'
+                                                            background: isFail ? 'rgba(254,226,226,0.5)' : 'white'
                                                         }}>
                                                             <td style={{ padding: '10px 14px', fontSize: '14px', fontWeight: '600', color: isFail ? '#991b1b' : '#1f2937' }}>
                                                                 {subj.subject}
-                                                                {isCore && (
-                                                                    <span style={{
-                                                                        marginLeft: '6px', padding: '1px 6px',
-                                                                        fontSize: '9px', fontWeight: '700',
-                                                                        background: '#e0e7ff', color: '#4338ca',
-                                                                        borderRadius: '4px'
-                                                                    }}>CORE</span>
-                                                                )}
                                                                 {isFail && (
                                                                     <span style={{
                                                                         marginLeft: '6px', padding: '1px 6px',
@@ -729,13 +750,28 @@ const ReEnrollmentRequests = () => {
                                                                     }}>FAILED</span>
                                                                 )}
                                                             </td>
-                                                            {cellValues.map((v, i) => (
-                                                                <td key={i} style={{ padding: '10px 14px', textAlign: 'center', fontSize: '13px', color: '#374151' }}>
-                                                                    {v ? parseFloat(v).toFixed(2) : '—'}
-                                                                </td>
-                                                            ))}
+                                                            {cellValues.map((v, i) => {
+                                                                const termKey = termKeys[i];
+                                                                const termVal = subj.termMap[termKey];
+                                                                const isFailingTerm = termVal !== undefined && termVal !== null && termVal < 75;
+                                                                return (
+                                                                    <td
+                                                                        key={i}
+                                                                        style={{
+                                                                            padding: '10px 14px',
+                                                                            textAlign: 'center',
+                                                                            fontSize: '13px',
+                                                                            fontWeight: isFailingTerm ? '700' : '400',
+                                                                            color: isFailingTerm ? '#991b1b' : '#374151',
+                                                                            background: isFailingTerm ? 'rgba(220,38,38,0.15)' : 'transparent'
+                                                                        }}
+                                                                    >
+                                                                        {v !== null && v !== undefined ? parseFloat(v).toFixed(2) : '—'}
+                                                                    </td>
+                                                                );
+                                                            })}
                                                             <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                                                                {subj.finalAve ? (
+                                                                {subj.finalAve !== null ? (
                                                                     <span style={{
                                                                         padding: '4px 12px', borderRadius: '10px',
                                                                         fontSize: '13px', fontWeight: '700',
@@ -826,7 +862,7 @@ const ReEnrollmentRequests = () => {
                         <textarea
                             value={rejectReason}
                             onChange={(e) => setRejectReason(e.target.value)}
-                            placeholder="e.g., May bagsak sa core subjects, Incomplete grades, Failed subjects..."
+                            placeholder="e.g., May term below 75 (failed), Incomplete grades, Failed subjects..."
                             rows={4}
                             style={{
                                 width: '100%', padding: '10px 14px',

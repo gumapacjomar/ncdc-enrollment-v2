@@ -86,17 +86,29 @@ export const getHonorTier = (average, lowestSubjectGrade) => {
 /**
  * Compute honor tier from a list of subject averages
  * @param {Array} subjects - Array of { subject, finalAve }
- * @returns {object} - { tier, average, lowestGrade, isHonor }
+ * @returns {object} - { tier, average, lowestGrade, isHonor, subjects }
  */
 export const computeHonorFromSubjects = (subjects) => {
     if (!subjects || subjects.length === 0) {
-        return { tier: HONOR_TIERS.NONE, average: 0, lowestGrade: 0, isHonor: false };
+        return {
+            tier: HONOR_TIERS.NONE,
+            average: 0,
+            lowestGrade: 0,
+            isHonor: false,
+            subjects: []   // ✅ FIX: Return empty array para dili mo-crash
+        };
     }
 
     // Filter subjects with valid finalAve
     const validSubjects = subjects.filter(s => s.finalAve !== null && s.finalAve !== undefined);
     if (validSubjects.length === 0) {
-        return { tier: HONOR_TIERS.NONE, average: 0, lowestGrade: 0, isHonor: false };
+        return {
+            tier: HONOR_TIERS.NONE,
+            average: 0,
+            lowestGrade: 0,
+            isHonor: false,
+            subjects: []   // ✅ FIX
+        };
     }
 
     const aves = validSubjects.map(s => parseFloat(s.finalAve));
@@ -109,7 +121,8 @@ export const computeHonorFromSubjects = (subjects) => {
         tier,
         average: parseFloat(average),
         lowestGrade,
-        isHonor: tier !== HONOR_TIERS.NONE
+        isHonor: tier !== HONOR_TIERS.NONE,
+        subjects: validSubjects   // ✅ FIX: Include para sa display
     };
 };
 
@@ -120,7 +133,13 @@ export const computeHonorFromSubjects = (subjects) => {
  */
 export const computeHonorFromGrades = (grades) => {
     if (!grades || grades.length === 0) {
-        return { tier: HONOR_TIERS.NONE, average: 0, lowestGrade: 0, isHonor: false, subjects: [] };
+        return {
+            tier: HONOR_TIERS.NONE,
+            average: 0,
+            lowestGrade: 0,
+            isHonor: false,
+            subjects: []
+        };
     }
 
     // Group grades by subject

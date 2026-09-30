@@ -9,6 +9,8 @@ const HonorStudents = () => {
     const location = useLocation();
     const [loading, setLoading] = useState(true);
     const [honorStudents, setHonorStudents] = useState([]);
+    const [availableSYs, setAvailableSYs] = useState([]);
+    const [selectedSY, setSelectedSY] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [filterGrade, setFilterGrade] = useState('');
     const [filterTier, setFilterTier] = useState('all');
@@ -28,9 +30,18 @@ const HonorStudents = () => {
     useEffect(() => {
         if (user && user.role === 'admin') {
             fetchProfile();
-            fetchHonorStudents();
+            fetchHonorStudents(); // No SY — auto-detect
         }
+        // eslint-disable-next-line
     }, []);
+
+    // ✅ Re-fetch when SY changes (with override, avoid closure bug)
+    useEffect(() => {
+        if (selectedSY && user?.role === 'admin') {
+            fetchHonorStudents(selectedSY);
+        }
+        // eslint-disable-next-line
+    }, [selectedSY]);
 
     const fetchProfile = async () => {
         try {
@@ -43,17 +54,73 @@ const HonorStudents = () => {
         }
     };
 
-    const fetchHonorStudents = async () => {
+    // ✅ FIXED: Accept `overrideSY` param para walay closure bug
+    const fetchHonorStudents = async (overrideSY = null) => {
         setLoading(true);
         try {
-            // Get all enrollments
             const enrollRes = await API.get('/registrar/enrollments');
             const allEnrollments = Array.isArray(enrollRes.data) ? enrollRes.data : [];
 
-            // Get unique students (only enrolled status = current)
+            console.log('🐛 DEBUG: Total enrollments =', allEnrollments.length);
+
+            // ✅ Valid statuses: passed, enrolled, graduated
+            const validStatuses = ['passed', 'enrolled', 'graduated'];
+            const validEnrollments = allEnrollments.filter(e =>
+                validStatuses.includes(e.status)
+            );
+
+            console.log('🐛 DEBUG: Valid enrollments =', validEnrollments.length);
+
+            // ✅ Collect unique SYs
+            const sySet = new Set();
+            validEnrollments.forEach(e => {
+                if (e.school_year) sySet.add(e.school_year);
+            });
+            const syList = Array.from(sySet).sort((a, b) => b.localeCompare(a));
+
+            console.log('🐛 DEBUG: SY list =', syList);
+
+            setAvailableSYs(syList);
+
+            // ✅ Determine target SY: use override or auto-detect
+            let targetSY = overrideSY;
+
+            if (!targetSY) {
+                // Auto-detect: prefer latest 'passed' SY
+                const passedSYs = validEnrollments
+                    .filter(e => e.status === 'passed')
+                    .map(e => e.school_year);
+                if (passedSYs.length > 0) {
+                    targetSY = passedSYs.sort((a, b) => b.localeCompare(a))[0];
+                } else {
+                    targetSY = syList[0];
+                }
+                // Sync state if different
+                if (targetSY && targetSY !== selectedSY) {
+                    setSelectedSY(targetSY);
+                }
+            }
+
+            console.log('🐛 DEBUG: Target SY =', targetSY);
+
+            if (!targetSY) {
+                console.log('🐛 DEBUG: No target SY — exiting');
+                setHonorStudents([]);
+                return;
+            }
+
+            // ✅ Filter enrollments for target SY
+            const syEnrollments = validEnrollments.filter(
+                e => e.school_year === targetSY
+            );
+
+            console.log('🐛 DEBUG: SY enrollments =', syEnrollments.length);
+            console.log('🐛 DEBUG: SY enrollments data =', syEnrollments);
+
+            // ✅ Unique students (per SY)
             const uniqueStudents = {};
-            allEnrollments.forEach(e => {
-                if (e.status === 'enrolled') {
+            syEnrollments.forEach(e => {
+                if (!uniqueStudents[e.student_id]) {
                     uniqueStudents[e.student_id] = {
                         student_id: e.student_id,
                         public_id: e.public_id,
@@ -63,33 +130,44 @@ const HonorStudents = () => {
                         grade_level: e.grade_level,
                         section_name: e.section_name,
                         school_year: e.school_year,
-                        enrollment_id: e.id
+                        enrollment_id: e.id,
+                        enrollment_status: e.status
                     };
                 }
             });
 
-            // Fetch grades for each student's current enrollment
+            console.log('🐛 DEBUG: Unique students =', Object.keys(uniqueStudents).length);
+
+            // ✅ Fetch grades + compute honor
             const honorList = [];
             const studentIds = Object.keys(uniqueStudents);
 
             for (const studentId of studentIds) {
                 const student = uniqueStudents[studentId];
                 try {
-                    const gradesRes = await API.get(`/registrar/grades/enrollment/${student.enrollment_id}`);
+                    const gradesRes = await API.get(
+                        `/registrar/grades/enrollment/${student.enrollment_id}`
+                    );
                     const grades = Array.isArray(gradesRes.data) ? gradesRes.data : [];
+
+                    console.log(`🐛 ${student.first_name} ${student.last_name} — grades count = ${grades.length}`);
 
                     if (grades.length === 0) continue;
 
                     const honor = computeHonorFromGrades(grades);
 
+                    console.log(`🐛 ${student.first_name} — honor =`, honor);
+
                     if (honor.isHonor) {
+                        // ✅ DEFENSIVE: fallback kung undefined ang honor.subjects
+                        const subjects = honor.subjects || [];
                         honorList.push({
                             ...student,
                             tier: honor.tier,
                             average: honor.average,
                             lowestGrade: honor.lowestGrade,
-                            subjects: honor.subjects,
-                            totalSubjects: honor.subjects.length
+                            subjects: subjects,
+                            totalSubjects: subjects.length
                         });
                     }
                 } catch (err) {
@@ -97,7 +175,8 @@ const HonorStudents = () => {
                 }
             }
 
-            // Sort by tier rank then average
+            console.log('🐛 DEBUG: Honor list =', honorList.length);
+
             const sorted = sortHonorStudents(honorList);
             setHonorStudents(sorted);
         } catch (error) {
@@ -260,6 +339,37 @@ const HonorStudents = () => {
                     </p>
                 </div>
 
+                {/* ✅ SY Selector */}
+                {availableSYs.length > 0 && (
+                    <div style={{
+                        background: 'white', padding: '16px 20px', borderRadius: '12px',
+                        marginBottom: '20px', border: '1px solid #e5e7eb',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                        display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center'
+                    }}>
+                        <label style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>
+                            📅 School Year:
+                        </label>
+                        <select
+                            value={selectedSY}
+                            onChange={(e) => setSelectedSY(e.target.value)}
+                            style={{
+                                padding: '8px 14px', borderRadius: '8px',
+                                border: '1px solid #d1d5db', fontSize: '14px',
+                                outline: 'none', minWidth: '160px',
+                                fontWeight: '600', color: '#1f2937'
+                            }}
+                        >
+                            {availableSYs.map(sy => (
+                                <option key={sy} value={sy}>{sy}</option>
+                            ))}
+                        </select>
+                        <div style={{ fontSize: '13px', color: '#6b7280', marginLeft: 'auto' }}>
+                            {honorStudents.length} honor student(s) sa SY {selectedSY}
+                        </div>
+                    </div>
+                )}
+
                 {/* Stats Cards */}
                 <div style={{
                     display: 'grid',
@@ -386,7 +496,7 @@ const HonorStudents = () => {
                 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                         <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1f2937', margin: 0 }}>
-                            🏆 Honor Students List
+                            🏆 Honor Students List {selectedSY && <span style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>(SY {selectedSY})</span>}
                         </h3>
                         <span style={{ fontSize: '13px', color: '#6b7280' }}>
                             {filtered.length} student(s)
@@ -404,7 +514,7 @@ const HonorStudents = () => {
                             <p style={{ fontSize: '14px' }}>
                                 {searchTerm || filterGrade || filterTier !== 'all'
                                     ? 'Try changing your filters.'
-                                    : 'No students currently qualify for honors.'}
+                                    : `Walay honor student sa SY ${selectedSY || 'nga napili'}.`}
                             </p>
                         </div>
                     ) : (

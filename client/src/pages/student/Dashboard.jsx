@@ -15,7 +15,6 @@ const StudentDashboard = () => {
   const [profilePicPreview, setProfilePicPreview] = useState(null);
   const [activeMenu, setActiveMenu] = useState('dashboard');
 
-  // ===== EDIT PROFILE STATES =====
   const [editMode, setEditMode] = useState(false);
   const [editData, setEditData] = useState({
     first_name: '',
@@ -27,7 +26,6 @@ const StudentDashboard = () => {
   const [editLoading, setEditLoading] = useState(false);
   const [editMessage, setEditMessage] = useState('');
 
-  // ===== CHANGE PASSWORD STATES =====
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
@@ -37,14 +35,11 @@ const StudentDashboard = () => {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState('');
 
-  // ===== PROFILE PICTURE UPLOAD STATES =====
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
 
-  // ===== REPORT CARD STATE =====
   const [reportCardSY, setReportCardSY] = useState('');
 
-  // ===== RE-ENROLLMENT STATE =====
   const [showReenrollModal, setShowReenrollModal] = useState(false);
   const [reenrollRemarks, setReenrollRemarks] = useState('');
   const [reenrollSubmitting, setReenrollSubmitting] = useState(false);
@@ -52,12 +47,28 @@ const StudentDashboard = () => {
 
   const user = JSON.parse(localStorage.getItem('user'));
 
+  const OLD_QUARTERS = ['1st Quarter', '2nd Quarter', '3rd Quarter', '4th Quarter'];
+  const NEW_TERMS = ['Term 1', 'Term 2', 'Term 3'];
+  const OLD_DISPLAY = ['Q1', 'Q2', 'Q3', 'Q4'];
+  const NEW_DISPLAY = ['T1', 'T2', 'T3'];
+
+  const TERM_SHORT_MAP = {
+    '1st Quarter': 'Q1',
+    '2nd Quarter': 'Q2',
+    '3rd Quarter': 'Q3',
+    '4th Quarter': 'Q4',
+    'Term 1': 'T1',
+    'Term 2': 'T2',
+    'Term 3': 'T3'
+  };
+
   useEffect(() => {
     if (!user || user.role !== 'student') {
       navigate('/login');
     } else {
       fetchStudentData();
     }
+    // eslint-disable-next-line
   }, [navigate]);
 
   const fetchStudentData = async () => {
@@ -248,7 +259,7 @@ const StudentDashboard = () => {
       const res = await API.post('/student/reenrollment/apply', {
         student_id: user.id,
         current_enrollment_id: currentEnrollment.id,
-        remarks: reenrollRemarks || 'Student-initiated re-enrollment'
+        remarks: reenrollRemarks || (hasFailingSubjects ? 'Student-initiated retention' : 'Student-initiated re-enrollment')
       });
 
       setReenrollMessage({ type: 'success', text: res.data.message });
@@ -258,7 +269,7 @@ const StudentDashboard = () => {
         setReenrollRemarks('');
         setReenrollMessage({ type: '', text: '' });
         fetchStudentData();
-      }, 2000);
+      }, 2500);
     } catch (err) {
       setReenrollMessage({
         type: 'error',
@@ -288,57 +299,136 @@ const StudentDashboard = () => {
 
   const statusInfo = application ? getStatusInfo(application.status) : getStatusInfo('pending');
 
-  // ===== CURRENT ENROLLMENT =====
   const getCurrentEnrollment = () => {
     return enrollments.find(e => e.status === 'enrolled') || enrollments[0] || null;
   };
 
   const currentEnrollment = getCurrentEnrollment();
 
-  // ===== LATEST GRADES =====
   const getLatestGrades = () => {
     if (enrollments.length === 0 || grades.length === 0) return [];
     const latestEnrollment = enrollments[0];
-    return grades.filter(g => 
-      g.school_year === latestEnrollment.school_year && 
+    return grades.filter(g =>
+      g.school_year === latestEnrollment.school_year &&
       g.grade_level === latestEnrollment.grade_level
     );
   };
 
   const latestGrades = getLatestGrades();
 
-  // ===== AVERAGE =====
   const calculateAverage = (gradeList = grades) => {
     if (gradeList.length === 0) return 0;
     const sum = gradeList.reduce((acc, g) => acc + parseFloat(g.grade || 0), 0);
     return (sum / gradeList.length).toFixed(2);
   };
 
-  // ===== SUBJECT AVERAGES =====
+  const detectSystem = (gradeList) => {
+    if (!gradeList || gradeList.length === 0) {
+      return {
+        isOldSystem: false,
+        columns: NEW_TERMS,
+        displayHeaders: NEW_DISPLAY
+      };
+    }
+
+    const hasOldQuarters = gradeList.some(g =>
+      g.quarter && g.quarter.toLowerCase().includes('quarter')
+    );
+
+    if (hasOldQuarters) {
+      return {
+        isOldSystem: true,
+        columns: OLD_QUARTERS,
+        displayHeaders: OLD_DISPLAY
+      };
+    }
+
+    return {
+      isOldSystem: false,
+      columns: NEW_TERMS,
+      displayHeaders: NEW_DISPLAY
+    };
+  };
+
   const buildSubjectAverages = (gradeList) => {
     const subjectMap = {};
+    const detection = detectSystem(gradeList);
+    const expectedTerms = detection.columns;
+
     gradeList.forEach(g => {
       if (!subjectMap[g.subject]) {
-        subjectMap[g.subject] = { q1: null, q2: null, q3: null, q4: null, remarks: '' };
+        subjectMap[g.subject] = {
+          q1: null, q2: null, q3: null, q4: null,
+          t1: null, t2: null, t3: null,
+          remarks: '',
+          isOldSystem: detection.isOldSystem
+        };
       }
-      const q = g.quarter?.toLowerCase() || '';
-      if (q.includes('1st')) subjectMap[g.subject].q1 = parseFloat(g.grade);
-      else if (q.includes('2nd')) subjectMap[g.subject].q2 = parseFloat(g.grade);
-      else if (q.includes('3rd')) subjectMap[g.subject].q3 = parseFloat(g.grade);
-      else if (q.includes('4th')) subjectMap[g.subject].q4 = parseFloat(g.grade);
+
+      const q = (g.quarter || '').toLowerCase();
+      const gradeVal = parseFloat(g.grade);
+
+      if (q.includes('1st quarter')) subjectMap[g.subject].q1 = gradeVal;
+      else if (q.includes('2nd quarter')) subjectMap[g.subject].q2 = gradeVal;
+      else if (q.includes('3rd quarter')) subjectMap[g.subject].q3 = gradeVal;
+      else if (q.includes('4th quarter')) subjectMap[g.subject].q4 = gradeVal;
+      else if (q === 'term 1') subjectMap[g.subject].t1 = gradeVal;
+      else if (q === 'term 2') subjectMap[g.subject].t2 = gradeVal;
+      else if (q === 'term 3') subjectMap[g.subject].t3 = gradeVal;
+
       if (g.remarks) subjectMap[g.subject].remarks = g.remarks;
     });
 
     return Object.entries(subjectMap).map(([subject, data]) => {
-      const quarters = [data.q1, data.q2, data.q3, data.q4].filter(v => v !== null);
-      const finalAve = quarters.length > 0 
-        ? (quarters.reduce((a, b) => a + b, 0) / quarters.length).toFixed(2)
+      const termMap = {};
+
+      if (detection.isOldSystem) {
+        if (data.q1 !== null) termMap['1st Quarter'] = data.q1;
+        if (data.q2 !== null) termMap['2nd Quarter'] = data.q2;
+        if (data.q3 !== null) termMap['3rd Quarter'] = data.q3;
+        if (data.q4 !== null) termMap['4th Quarter'] = data.q4;
+      } else {
+        if (data.t1 !== null) termMap['Term 1'] = data.t1;
+        if (data.t2 !== null) termMap['Term 2'] = data.t2;
+        if (data.t3 !== null) termMap['Term 3'] = data.t3;
+      }
+
+      const values = expectedTerms
+        .map(t => termMap[t])
+        .filter(v => v !== null && v !== undefined && !isNaN(v));
+
+      const finalAve = values.length > 0
+        ? parseFloat((values.reduce((a, b) => a + b, 0) / values.length).toFixed(2))
         : null;
-      return { subject, ...data, finalAve };
+
+      const failingTerms = [];
+      expectedTerms.forEach(term => {
+        const val = termMap[term];
+        if (val !== null && val !== undefined && !isNaN(val) && val < 75) {
+          failingTerms.push({
+            term,
+            short: TERM_SHORT_MAP[term] || term,
+            value: val
+          });
+        }
+      });
+
+      const hasFailingTerm = failingTerms.length > 0;
+
+      return {
+        subject,
+        q1: data.q1, q2: data.q2, q3: data.q3, q4: data.q4,
+        t1: data.t1, t2: data.t2, t3: data.t3,
+        termMap,
+        finalAve,
+        isOldSystem: detection.isOldSystem,
+        failingTerms,
+        hasFailingTerm,
+        remarks: data.remarks
+      };
     });
   };
 
-  // ===== GRADES BY SY =====
   const buildGradesBySY = () => {
     const grouped = {};
     grades.forEach(g => {
@@ -353,11 +443,16 @@ const StudentDashboard = () => {
       grouped[key].subjects.push(g);
     });
 
-    return Object.values(grouped).map(group => ({
-      ...group,
-      subjectAverages: buildSubjectAverages(group.subjects),
-      overallAverage: calculateAverage(group.subjects)
-    })).sort((a, b) => {
+    return Object.values(grouped).map(group => {
+      const detection = detectSystem(group.subjects);
+      return {
+        ...group,
+        subjectAverages: buildSubjectAverages(group.subjects),
+        overallAverage: calculateAverage(group.subjects),
+        isOldSystem: detection.isOldSystem,
+        displayHeaders: detection.displayHeaders
+      };
+    }).sort((a, b) => {
       if (a.school_year > b.school_year) return -1;
       if (a.school_year < b.school_year) return 1;
       return 0;
@@ -366,17 +461,31 @@ const StudentDashboard = () => {
 
   const gradesBySY = buildGradesBySY();
 
-  // ===== REPORT CARD =====
+  const latestSubjectAverages = buildSubjectAverages(latestGrades);
+  const latestFailingSubjects = latestSubjectAverages.filter(s => s.hasFailingTerm);
+  const hasFailingSubjects = latestFailingSubjects.length > 0;
+
+  // ✅ Compute passing subjects count (for summary card)
+  const latestPassingCount = latestSubjectAverages.length - latestFailingSubjects.length;
+
   const getReportCard = (sy) => {
     const reportGrades = grades.filter(g => g.school_year === sy);
     const enrollment = enrollments.find(e => e.school_year === sy);
+    const detection = detectSystem(reportGrades);
+    const subjectAverages = buildSubjectAverages(reportGrades);
+    const failingSubjects = subjectAverages.filter(s => s.hasFailingTerm);
+
     return {
       school_year: sy,
       grade_level: enrollment?.grade_level || '',
       section: enrollment?.section_name || '',
       status: enrollment?.status || '',
-      subjects: buildSubjectAverages(reportGrades),
-      overallAverage: calculateAverage(reportGrades)
+      subjects: subjectAverages,
+      failingSubjects,
+      hasFailingSubjects: failingSubjects.length > 0,
+      overallAverage: calculateAverage(reportGrades),
+      isOldSystem: detection.isOldSystem,
+      displayHeaders: detection.displayHeaders
     };
   };
 
@@ -427,19 +536,15 @@ const StudentDashboard = () => {
       {/* Welcome Card */}
       <div style={{
         background: 'linear-gradient(135deg, #1a56db, #3b82f6)',
-        borderRadius: '16px',
-        padding: '28px',
-        color: 'white',
-        marginBottom: '24px',
-        boxShadow: '0 8px 25px rgba(26,86,219,0.3)'
+        borderRadius: '16px', padding: '28px', color: 'white',
+        marginBottom: '24px', boxShadow: '0 8px 25px rgba(26,86,219,0.3)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
           <div style={{
             width: '72px', height: '72px', borderRadius: '50%',
             background: 'rgba(255,255,255,0.2)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '28px', fontWeight: '700',
-            overflow: 'hidden'
+            fontSize: '28px', fontWeight: '700', overflow: 'hidden'
           }}>
             {profilePicPreview ? (
               <img src={profilePicPreview} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -459,22 +564,60 @@ const StudentDashboard = () => {
           </div>
           <div style={{
             background: 'rgba(255,255,255,0.2)',
-            padding: '8px 16px',
-            borderRadius: '20px',
-            fontSize: '13px',
-            fontWeight: '600'
+            padding: '8px 16px', borderRadius: '20px',
+            fontSize: '13px', fontWeight: '600'
           }}>
             {statusInfo.icon} {statusInfo.label}
           </div>
         </div>
       </div>
 
+      {/* ✅ FAILED WARNING BANNER */}
+      {hasFailingSubjects && (
+        <div style={{
+          background: '#fee2e2',
+          border: '2px solid #dc2626',
+          borderRadius: '14px',
+          padding: '20px 24px',
+          marginBottom: '24px',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '16px'
+        }}>
+          <div style={{ fontSize: '36px', flexShrink: 0 }}>⚠️</div>
+          <div style={{ flex: 1 }}>
+            <h3 style={{
+              margin: '0 0 6px', fontSize: '17px',
+              fontWeight: '700', color: '#991b1b'
+            }}>
+              Failed Subject Warning
+            </h3>
+            <p style={{
+              margin: '0 0 10px', fontSize: '14px',
+              color: '#7f1d1d', lineHeight: '1.5'
+            }}>
+              Adunay kay subject(s) nga naay <strong>term below 75</strong>. Base sa promotion policy, kailangan ka <strong>mag-RETAIN</strong> sa same grade level.
+            </p>
+            <div style={{
+              background: 'rgba(255,255,255,0.6)',
+              borderRadius: '8px', padding: '10px 14px',
+              fontSize: '13px', color: '#991b1b', fontWeight: '600'
+            }}>
+              {latestFailingSubjects.map((s, idx) => (
+                <div key={idx} style={{ marginBottom: idx < latestFailingSubjects.length - 1 ? '4px' : 0 }}>
+                  ❌ <strong>{s.subject}</strong> — {s.failingTerms.map(ft => `${ft.short}: ${ft.value.toFixed(2)}`).join(', ')}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Info Cards */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '16px',
-        marginBottom: '24px'
+        gap: '16px', marginBottom: '24px'
       }}>
         <div style={{
           background: 'white', padding: '20px', borderRadius: '12px',
@@ -501,19 +644,21 @@ const StudentDashboard = () => {
         <div style={{
           background: 'white', padding: '20px', borderRadius: '12px',
           border: '1px solid #e5e7eb',
-          borderTop: `4px solid ${parseFloat(calculateAverage(latestGrades)) >= 75 ? '#10b981' : '#ef4444'}`,
+          borderTop: `4px solid ${hasFailingSubjects ? '#ef4444' : (parseFloat(calculateAverage(latestGrades)) >= 75 ? '#10b981' : '#ef4444')}`,
           boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
         }}>
           <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>General Average</div>
           <div style={{
             fontSize: '26px', fontWeight: '800', marginTop: '4px',
-            color: parseFloat(calculateAverage(latestGrades)) >= 75 ? '#065f46' : '#991b1b'
+            color: hasFailingSubjects ? '#991b1b' : (parseFloat(calculateAverage(latestGrades)) >= 75 ? '#065f46' : '#991b1b')
           }}>
             {latestGrades.length > 0 ? calculateAverage(latestGrades) : '—'}
           </div>
           <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
-            {latestGrades.length > 0 
-              ? (parseFloat(calculateAverage(latestGrades)) >= 75 ? '✅ Passing' : '⚠️ Needs Improvement')
+            {latestGrades.length > 0
+              ? (hasFailingSubjects
+                  ? '⚠️ May failing term'
+                  : (parseFloat(calculateAverage(latestGrades)) >= 75 ? '✅ Passing' : '⚠️ Needs Improvement'))
               : 'No grades yet'
             }
           </div>
@@ -526,138 +671,18 @@ const StudentDashboard = () => {
         }}>
           <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>Subjects</div>
           <div style={{ fontSize: '22px', fontWeight: '700', color: '#1f2937', marginTop: '4px' }}>
-            {latestGrades.length}
+            {latestSubjectAverages.length}
           </div>
           <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
-            Total graded entries
+            {hasFailingSubjects
+              ? `✅ ${latestPassingCount} passed • ❌ ${latestFailingSubjects.length} failed`
+              : '✅ All passed'
+            }
           </div>
         </div>
       </div>
 
-      {/* Re-enrollment Alert (if eligible) */}
-      {(() => {
-        const canApply = currentEnrollment && 
-                        currentEnrollment.status === 'passed' && 
-                        currentEnrollment.grade_level !== 'Grade 6' &&
-                        !reenrollRequests.find(r => r.status === 'pending');
-        if (!canApply) return null;
-        return (
-          <div style={{
-            background: 'linear-gradient(135deg, #10b981, #34d399)',
-            padding: '20px 24px', borderRadius: '14px', color: 'white',
-            marginBottom: '24px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '12px',
-            boxShadow: '0 8px 25px rgba(16,185,129,0.3)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{ fontSize: '36px' }}>🎓</div>
-              <div>
-                <div style={{ fontSize: '16px', fontWeight: '700', marginBottom: '4px' }}>
-                  Ready for Next Grade!
-                </div>
-                <div style={{ fontSize: '13px', opacity: 0.95 }}>
-                  Mana ka na sa {currentEnrollment.grade_level}. Apply na para sa sunod!
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={() => setActiveMenu('reenrollment')}
-              style={{
-                background: 'white',
-                color: '#065f46',
-                border: 'none',
-                padding: '10px 24px',
-                borderRadius: '10px',
-                fontSize: '14px',
-                fontWeight: '700',
-                cursor: 'pointer',
-                boxShadow: '0 4px 15px rgba(0,0,0,0.15)'
-              }}
-            >
-              Apply Now →
-            </button>
-          </div>
-        );
-      })()}
-
-      {/* Latest Grades Preview */}
-      {latestGrades.length > 0 && (
-        <div style={{
-          background: 'white', borderRadius: '14px',
-          border: '1px solid #e5e7eb', overflow: 'hidden',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.04)', marginBottom: '24px'
-        }}>
-          <div style={{
-            padding: '16px 24px',
-            background: 'linear-gradient(135deg, #1a56db, #3b82f6)',
-            color: 'white',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '12px'
-          }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>
-                📈 Latest Grades
-              </h3>
-              <p style={{ margin: '4px 0 0', fontSize: '13px', opacity: 0.9 }}>
-                {currentEnrollment?.grade_level} — SY {currentEnrollment?.school_year}
-              </p>
-            </div>
-            <button
-              onClick={() => setActiveMenu('grades')}
-              style={{
-                background: 'rgba(255,255,255,0.2)',
-                color: 'white',
-                border: 'none',
-                padding: '8px 16px',
-                borderRadius: '8px',
-                fontSize: '13px',
-                fontWeight: '600',
-                cursor: 'pointer'
-              }}
-            >
-              View All →
-            </button>
-          </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: '#f9fafb', borderBottom: '2px solid #e5e7eb' }}>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Subject</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Quarter</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Grade</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Remarks</th>
-                </tr>
-              </thead>
-              <tbody>
-                {latestGrades.slice(0, 5).map((g, idx) => {
-                  const gc = getGradeColor(g.grade);
-                  return (
-                    <tr key={g.id || idx} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                      <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: '600', color: '#1f2937' }}>{g.subject}</td>
-                      <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', color: '#6b7280' }}>{g.quarter}</td>
-                      <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                        <span style={{
-                          padding: '4px 14px', borderRadius: '12px',
-                          fontSize: '14px', fontWeight: '700',
-                          background: gc.bg, color: gc.color
-                        }}>{g.grade}</span>
-                      </td>
-                      <td style={{ padding: '12px 16px', fontSize: '13px', color: '#6b7280' }}>{g.remarks || '—'}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {/* ✅ REMOVED: Re-enrollment Alert banner — moved to Re-enrollment page only */}
 
       {/* Quick Links */}
       <div style={{
@@ -710,32 +735,72 @@ const StudentDashboard = () => {
   const renderReEnrollment = () => {
     const pendingRequest = reenrollRequests.find(r => r.status === 'pending');
     const approvedRequest = reenrollRequests.find(r => r.status === 'approved');
-    const rejectedRequests = reenrollRequests.filter(r => r.status === 'rejected');
-
-    // Eligibility
-    const canApply = currentEnrollment && 
-                     (currentEnrollment.status === 'passed' || currentEnrollment.status === 'enrolled') && 
-                     currentEnrollment.grade_level !== 'Grade 6' &&
-                     !pendingRequest;
 
     const isGrade6 = currentEnrollment?.grade_level === 'Grade 6';
-
-    // Get next grade info
     const gradeLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
     const currentIdx = currentEnrollment ? gradeLevels.indexOf(currentEnrollment.grade_level) : -1;
-    const nextGrade = currentIdx >= 0 && currentIdx < 5 ? gradeLevels[currentIdx + 1] : null;
-    
-    let nextSY = '';
-    if (currentEnrollment?.school_year) {
-      const parts = currentEnrollment.school_year.split('-');
-      if (parts.length === 2) {
-        nextSY = `${parseInt(parts[0]) + 1}-${parseInt(parts[1]) + 1}`;
-      }
-    }
+
+    // ✅ RETAIN vs PROMOTE logic
+    const isRetained = hasFailingSubjects;
+    const targetGrade = isRetained
+      ? currentEnrollment?.grade_level
+      : (currentIdx >= 0 && currentIdx < 5 ? gradeLevels[currentIdx + 1] : null);
+
+    const canApply = currentEnrollment &&
+                     (currentEnrollment.status === 'passed' || currentEnrollment.status === 'enrolled') &&
+                     !pendingRequest &&
+                     !isGrade6;
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        {/* Current Enrollment Info */}
+        {/* ✅ RETAIN Banner */}
+        {isRetained && currentEnrollment && (
+          <div style={{
+            background: '#fee2e2',
+            border: '2px solid #dc2626',
+            borderRadius: '14px',
+            padding: '20px 24px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '16px'
+          }}>
+            <div style={{ fontSize: '36px', flexShrink: 0 }}>⚠️</div>
+            <div style={{ flex: 1 }}>
+              <h3 style={{
+                margin: '0 0 6px', fontSize: '17px',
+                fontWeight: '700', color: '#991b1b'
+              }}>
+                RETENTION — Kailangan nimo mag-enroll balik sa {currentEnrollment.grade_level}
+              </h3>
+              <p style={{
+                margin: '0 0 10px', fontSize: '14px',
+                color: '#7f1d1d', lineHeight: '1.5'
+              }}>
+                Adunay kay <strong>failing term(s)</strong> sa mosunod nga subject(s):
+              </p>
+              <div style={{
+                background: 'rgba(255,255,255,0.6)',
+                borderRadius: '8px', padding: '10px 14px',
+                fontSize: '13px', color: '#991b1b', fontWeight: '600',
+                marginBottom: '10px'
+              }}>
+                {latestFailingSubjects.map((s, idx) => (
+                  <div key={idx} style={{ marginBottom: idx < latestFailingSubjects.length - 1 ? '4px' : 0 }}>
+                    ❌ <strong>{s.subject}</strong> — {s.failingTerms.map(ft => `${ft.short}: ${ft.value.toFixed(2)}`).join(', ')}
+                  </div>
+                ))}
+              </div>
+              <p style={{
+                margin: 0, fontSize: '13px',
+                color: '#7f1d1d', lineHeight: '1.5'
+              }}>
+                📌 Base sa policy, mag-<strong>RETAIN</strong> ka sa <strong>{currentEnrollment.grade_level}</strong> sa sunod nga school year. Pwede nimo i-submit ang retention enrollment sa ubos.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Current Enrollment Card */}
         {currentEnrollment && (
           <div style={{
             background: 'white', padding: '24px', borderRadius: '14px',
@@ -774,7 +839,8 @@ const StudentDashboard = () => {
                   fontSize: '14px', fontWeight: '700', marginTop: '4px',
                   textTransform: 'capitalize',
                   color: currentEnrollment.status === 'passed' ? '#065f46' :
-                         currentEnrollment.status === 'enrolled' ? '#1a56db' : '#6b7280'
+                         currentEnrollment.status === 'enrolled' ? '#1a56db' :
+                         currentEnrollment.status === 'failed' ? '#991b1b' : '#6b7280'
                 }}>
                   {currentEnrollment.status}
                 </div>
@@ -783,7 +849,7 @@ const StudentDashboard = () => {
           </div>
         )}
 
-        {/* Pending Request */}
+        {/* Pending Request Card */}
         {pendingRequest && (
           <div style={{
             background: '#fef3c7', padding: '24px', borderRadius: '14px',
@@ -793,7 +859,7 @@ const StudentDashboard = () => {
               <span style={{ fontSize: '36px' }}>⏳</span>
               <div>
                 <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#92400e' }}>
-                  Re-enrollment Pending
+                  {isRetained ? 'Retention Request Pending' : 'Re-enrollment Pending'}
                 </h3>
                 <p style={{ margin: '4px 0 0', fontSize: '14px', color: '#92400e' }}>
                   Naghulat pa sa approval sa registrar.
@@ -802,10 +868,8 @@ const StudentDashboard = () => {
             </div>
             <div style={{
               background: 'rgba(255,255,255,0.6)',
-              padding: '12px 16px',
-              borderRadius: '8px',
-              fontSize: '14px',
-              color: '#92400e',
+              padding: '12px 16px', borderRadius: '8px',
+              fontSize: '14px', color: '#92400e',
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
               gap: '8px'
@@ -818,7 +882,7 @@ const StudentDashboard = () => {
           </div>
         )}
 
-        {/* Approved */}
+        {/* Approved Request Card */}
         {approvedRequest && !pendingRequest && (
           <div style={{
             background: '#d1fae5', padding: '24px', borderRadius: '14px',
@@ -828,7 +892,9 @@ const StudentDashboard = () => {
               <span style={{ fontSize: '36px' }}>✅</span>
               <div>
                 <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#065f46' }}>
-                  Re-enrollment Approved!
+                  {approvedRequest.current_grade_level === approvedRequest.next_grade_level
+                    ? 'Retention Approved!'
+                    : 'Re-enrollment Approved!'}
                 </h3>
                 <p style={{ margin: '4px 0 0', fontSize: '14px', color: '#065f46' }}>
                   Enrolled na sa <strong>{approvedRequest.next_grade_level}</strong> (SY {approvedRequest.next_school_year}).
@@ -838,19 +904,36 @@ const StudentDashboard = () => {
           </div>
         )}
 
-        {/* Apply Button */}
-        {canApply && (
+        {/* ✅ APPLY CARD — RETAIN or PROMOTE */}
+        {canApply && targetGrade && (
           <div style={{
-            background: 'linear-gradient(135deg, #10b981, #34d399)',
+            background: isRetained
+              ? 'linear-gradient(135deg, #f59e0b, #fbbf24)'
+              : 'linear-gradient(135deg, #10b981, #34d399)',
             padding: '32px', borderRadius: '14px', color: 'white',
-            textAlign: 'center', boxShadow: '0 8px 25px rgba(16,185,129,0.3)'
+            textAlign: 'center',
+            boxShadow: isRetained
+              ? '0 8px 25px rgba(245,158,11,0.3)'
+              : '0 8px 25px rgba(16,185,129,0.3)'
           }}>
-            <div style={{ fontSize: '64px', marginBottom: '12px' }}>🎓</div>
+            <div style={{ fontSize: '64px', marginBottom: '12px' }}>
+              {isRetained ? '🔁' : '🎓'}
+            </div>
             <h3 style={{ fontSize: '24px', fontWeight: '700', margin: '0 0 8px' }}>
-              Ready for {nextGrade}!
+              {isRetained
+                ? `Retain sa ${targetGrade}`
+                : `Ready for ${targetGrade}!`
+              }
             </h3>
-            <p style={{ fontSize: '14px', opacity: 0.95, marginBottom: '24px', maxWidth: '500px', margin: '0 auto 24px' }}>
-              Mana ka na sa <strong>{currentEnrollment.grade_level}</strong>. Pwede na ka mo-apply para sa <strong>{nextGrade}</strong> sa sunod nga school year.
+            <p style={{
+              fontSize: '14px', opacity: 0.95,
+              marginBottom: '24px', maxWidth: '500px',
+              margin: '0 auto 24px'
+            }}>
+              {isRetained
+                ? `Kailangan nimo mag-enroll balik sa ${targetGrade} (same grade level) kay naay failing term(s).`
+                : `Mana ka na sa ${currentEnrollment.grade_level}. Pwede na ka mo-apply para sa ${targetGrade} sa sunod nga school year.`
+              }
             </p>
             <button
               onClick={() => {
@@ -860,44 +943,62 @@ const StudentDashboard = () => {
               }}
               style={{
                 background: 'white',
-                color: '#065f46',
+                color: isRetained ? '#92400e' : '#065f46',
                 border: 'none',
-                padding: '14px 32px',
-                borderRadius: '10px',
-                fontSize: '16px',
-                fontWeight: '700',
+                padding: '14px 32px', borderRadius: '10px',
+                fontSize: '16px', fontWeight: '700',
                 cursor: 'pointer',
                 boxShadow: '0 4px 15px rgba(0,0,0,0.15)'
               }}
             >
-              📝 Apply for {nextGrade}
+              {isRetained
+                ? `🔁 Re-enroll sa ${targetGrade} (Retain)`
+                : `📝 Apply for ${targetGrade}`
+              }
             </button>
           </div>
         )}
 
-        {/* Not Eligible */}
-        {!canApply && !pendingRequest && !approvedRequest && (
+        {/* Grade 6 edge case */}
+        {isGrade6 && !pendingRequest && !approvedRequest && (
           <div style={{
             background: 'white', padding: '60px', borderRadius: '14px',
             textAlign: 'center', color: '#6b7280',
             border: '1px solid #e5e7eb'
           }}>
             <div style={{ fontSize: '64px', marginBottom: '12px' }}>
-              {isGrade6 ? '🎓' : '⏳'}
+              {isRetained ? '🔁' : '🎓'}
             </div>
             <h3 style={{ color: '#1f2937', marginBottom: '8px', fontSize: '20px' }}>
-              {isGrade6 ? 'Grade 6 Student' : 'Not Yet Eligible'}
+              {isRetained ? 'Grade 6 — Retain' : 'Grade 6 Graduate'}
             </h3>
             <p style={{ fontSize: '14px', maxWidth: '400px', margin: '0 auto' }}>
-              {isGrade6 
-                ? 'Kung ma-complete nimo ang Grade 6, mag-graduate ka na. Wala nay next grade level.'
-                : 'Kinahanglan nimo ma-complete ang current grade una mo maka-apply for next grade.'
+              {isRetained
+                ? 'Grade 6 ka nga naay failing term. Palihog kontaka ang registrar para sa retention process.'
+                : 'Kung ma-complete nimo ang Grade 6, mag-graduate ka na. Wala nay next grade level.'
               }
             </p>
           </div>
         )}
 
-        {/* History */}
+        {/* Not eligible (edge case) */}
+        {!canApply && !pendingRequest && !approvedRequest && !isGrade6 && !isRetained && (
+          <div style={{
+            background: 'white', padding: '60px', borderRadius: '14px',
+            textAlign: 'center', color: '#6b7280',
+            border: '1px solid #e5e7eb'
+          }}>
+            <div style={{ fontSize: '64px', marginBottom: '12px' }}>⏳</div>
+            <h3 style={{ color: '#1f2937', marginBottom: '8px', fontSize: '20px' }}>
+              Not Yet Eligible
+            </h3>
+            <p style={{ fontSize: '14px', maxWidth: '400px', margin: '0 auto' }}>
+              Kinahanglan nimo ma-complete ang current grade una mo maka-apply for next grade.
+            </p>
+          </div>
+        )}
+
+        {/* Request History */}
         {reenrollRequests.length > 0 && (
           <div style={{
             background: 'white', padding: '24px', borderRadius: '14px',
@@ -908,55 +1009,69 @@ const StudentDashboard = () => {
               📜 Request History ({reenrollRequests.length})
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {reenrollRequests.map(r => (
-                <div key={r.id} style={{
-                  padding: '16px',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '10px',
-                  background: '#f9fafb',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: '12px'
-                }}>
-                  <div style={{ flex: 1, minWidth: '200px' }}>
-                    <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
-                      {r.current_grade_level} → {r.next_grade_level}
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                      SY {r.next_school_year} • Submitted {new Date(r.created_at).toLocaleDateString()}
-                    </div>
-                    {r.average_grade && (
-                      <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
-                        Average: <strong>{r.average_grade}</strong>
+              {reenrollRequests.map(r => {
+                const isRetainRequest = r.current_grade_level === r.next_grade_level;
+                return (
+                  <div key={r.id} style={{
+                    padding: '16px',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '10px',
+                    background: '#f9fafb',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '12px'
+                  }}>
+                    <div style={{ flex: 1, minWidth: '200px' }}>
+                      <div style={{ fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
+                        {r.current_grade_level} → {r.next_grade_level}
+                        {isRetainRequest && (
+                          <span style={{
+                            marginLeft: '8px',
+                            padding: '2px 8px',
+                            fontSize: '10px',
+                            fontWeight: '700',
+                            background: '#fef3c7',
+                            color: '#92400e',
+                            borderRadius: '6px'
+                          }}>RETAIN</span>
+                        )}
                       </div>
-                    )}
-                    {r.registrar_remarks && (
-                      <div style={{
-                        fontSize: '12px',
-                        color: r.status === 'rejected' ? '#991b1b' : '#6b7280',
-                        fontStyle: 'italic',
-                        marginTop: '6px',
-                        padding: '6px 10px',
-                        background: r.status === 'rejected' ? '#fee2e2' : '#f3f4f6',
-                        borderRadius: '6px'
-                      }}>
-                        Registrar: "{r.registrar_remarks}"
+                      <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                        SY {r.next_school_year} • Submitted {new Date(r.created_at).toLocaleDateString()}
                       </div>
-                    )}
+                      {r.average_grade && (
+                        <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
+                          Average: <strong>{r.average_grade}</strong>
+                        </div>
+                      )}
+                      {r.registrar_remarks && (
+                        <div style={{
+                          fontSize: '12px',
+                          color: r.status === 'rejected' ? '#991b1b' : '#6b7280',
+                          fontStyle: 'italic',
+                          marginTop: '6px',
+                          padding: '6px 10px',
+                          background: r.status === 'rejected' ? '#fee2e2' : '#f3f4f6',
+                          borderRadius: '6px'
+                        }}>
+                          Registrar: "{r.registrar_remarks}"
+                        </div>
+                      )}
+                    </div>
+                    <span style={{
+                      padding: '6px 16px', borderRadius: '12px',
+                      fontSize: '12px', fontWeight: '700',
+                      textTransform: 'uppercase',
+                      background: r.status === 'approved' ? '#d1fae5' :
+                                  r.status === 'rejected' ? '#fee2e2' : '#fef3c7',
+                      color: r.status === 'approved' ? '#065f46' :
+                             r.status === 'rejected' ? '#991b1b' : '#92400e'
+                    }}>{r.status}</span>
                   </div>
-                  <span style={{
-                    padding: '6px 16px', borderRadius: '12px',
-                    fontSize: '12px', fontWeight: '700',
-                    textTransform: 'uppercase',
-                    background: r.status === 'approved' ? '#d1fae5' :
-                                r.status === 'rejected' ? '#fee2e2' : '#fef3c7',
-                    color: r.status === 'approved' ? '#065f46' :
-                           r.status === 'rejected' ? '#991b1b' : '#92400e'
-                  }}>{r.status}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -978,92 +1093,131 @@ const StudentDashboard = () => {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {gradesBySY.map((group, idx) => (
-            <div key={idx} style={{
-              background: 'white', borderRadius: '14px',
-              border: '1px solid #e5e7eb', overflow: 'hidden',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-            }}>
-              <div style={{
-                padding: '16px 24px',
-                background: 'linear-gradient(135deg, #1a56db, #3b82f6)',
-                color: 'white',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '12px'
-              }}>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>
-                    🎓 {group.grade_level}
-                  </h3>
-                  <p style={{ margin: '4px 0 0', fontSize: '13px', opacity: 0.9 }}>
-                    School Year {group.school_year}
-                  </p>
-                </div>
-                <div style={{
-                  background: 'rgba(255,255,255,0.2)',
-                  padding: '6px 14px',
-                  borderRadius: '12px',
-                  fontSize: '13px',
-                  fontWeight: '600'
-                }}>
-                  Ave: {group.overallAverage}
-                </div>
-              </div>
+          <div style={{
+            background: '#fff3cd', padding: '12px 18px', borderRadius: '10px',
+            border: '1px solid #ffc107', fontSize: '13px', color: '#92400e'
+          }}>
+            <strong>⚠️ Promotion Policy:</strong> Any term below 75 = FAILED. Kailangan mag-RETAIN sa same grade level.
+          </div>
 
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ background: '#f9fafb', borderBottom: '2px solid #e5e7eb' }}>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Subject</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', width: '70px' }}>Q1</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', width: '70px' }}>Q2</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', width: '70px' }}>Q3</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', width: '70px' }}>Q4</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', width: '100px' }}>Final Ave</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Remarks</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {group.subjectAverages.map((subj, sidx) => {
-                      const gc = getGradeColor(subj.finalAve);
-                      return (
-                        <tr key={sidx} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                          <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: '600', color: '#1f2937' }}>{subj.subject}</td>
-                          <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', color: '#6b7280' }}>
-                            {subj.q1 ? subj.q1.toFixed(2) : '—'}
-                          </td>
-                          <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', color: '#6b7280' }}>
-                            {subj.q2 ? subj.q2.toFixed(2) : '—'}
-                          </td>
-                          <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', color: '#6b7280' }}>
-                            {subj.q3 ? subj.q3.toFixed(2) : '—'}
-                          </td>
-                          <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', color: '#6b7280' }}>
-                            {subj.q4 ? subj.q4.toFixed(2) : '—'}
-                          </td>
-                          <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                            {subj.finalAve ? (
-                              <span style={{
-                                padding: '4px 12px', borderRadius: '10px',
-                                fontSize: '13px', fontWeight: '700',
-                                background: gc.bg, color: gc.color
-                              }}>{subj.finalAve}</span>
-                            ) : '—'}
-                          </td>
-                          <td style={{ padding: '12px 16px', fontSize: '13px', color: '#6b7280', fontStyle: 'italic' }}>
-                            {subj.remarks || '—'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+          {gradesBySY.map((group, idx) => {
+            const groupHasFailing = group.subjectAverages.some(s => s.hasFailingTerm);
+
+            return (
+              <div key={idx} style={{
+                background: 'white', borderRadius: '14px',
+                border: groupHasFailing ? '2px solid #dc2626' : '1px solid #e5e7eb',
+                overflow: 'hidden',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+              }}>
+                <div style={{
+                  padding: '16px 24px',
+                  background: groupHasFailing
+                    ? 'linear-gradient(135deg, #dc2626, #ef4444)'
+                    : 'linear-gradient(135deg, #1a56db, #3b82f6)',
+                  color: 'white',
+                  display: 'flex', justifyContent: 'space-between',
+                  alignItems: 'center', flexWrap: 'wrap', gap: '12px'
+                }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>
+                      🎓 {group.grade_level}
+                    </h3>
+                    <p style={{ margin: '4px 0 0', fontSize: '13px', opacity: 0.9 }}>
+                      School Year {group.school_year}
+                    </p>
+                  </div>
+                  <div style={{
+                    background: 'rgba(255,255,255,0.2)',
+                    padding: '6px 14px', borderRadius: '12px',
+                    fontSize: '13px', fontWeight: '600'
+                  }}>
+                    Ave: {group.overallAverage}
+                  </div>
+                </div>
+
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#f9fafb', borderBottom: '2px solid #e5e7eb' }}>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Subject</th>
+                        {group.displayHeaders.map((h, i) => (
+                          <th key={i} style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', width: '70px' }}>{h}</th>
+                        ))}
+                        <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', width: '100px' }}>Final Ave</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Remarks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.subjectAverages.map((subj, sidx) => {
+                        const gc = getGradeColor(subj.finalAve);
+                        const isFail = subj.hasFailingTerm;
+
+                        const cellValues = group.isOldSystem
+                          ? [subj.q1, subj.q2, subj.q3, subj.q4]
+                          : [subj.t1, subj.t2, subj.t3];
+
+                        const termKeys = group.isOldSystem
+                          ? ['1st Quarter', '2nd Quarter', '3rd Quarter', '4th Quarter']
+                          : ['Term 1', 'Term 2', 'Term 3'];
+
+                        return (
+                          <tr key={sidx} style={{
+                            borderBottom: '1px solid #f3f4f6',
+                            background: isFail ? 'rgba(254,226,226,0.5)' : 'transparent'
+                          }}>
+                            <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: '600', color: isFail ? '#991b1b' : '#1f2937' }}>
+                              {subj.subject}
+                              {isFail && (
+                                <span style={{
+                                  marginLeft: '6px', padding: '1px 6px',
+                                  fontSize: '9px', fontWeight: '700',
+                                  background: '#dc2626', color: 'white',
+                                  borderRadius: '4px'
+                                }}>FAILED</span>
+                              )}
+                            </td>
+                            {cellValues.map((v, i) => {
+                              const termKey = termKeys[i];
+                              const termVal = subj.termMap[termKey];
+                              const isFailingTerm = termVal !== undefined && termVal !== null && termVal < 75;
+                              return (
+                                <td
+                                  key={i}
+                                  style={{
+                                    padding: '12px 16px',
+                                    textAlign: 'center',
+                                    fontSize: '13px',
+                                    fontWeight: isFailingTerm ? '700' : '400',
+                                    color: isFailingTerm ? '#991b1b' : '#6b7280',
+                                    background: isFailingTerm ? 'rgba(220,38,38,0.15)' : 'transparent'
+                                  }}
+                                >
+                                  {v !== null && v !== undefined ? parseFloat(v).toFixed(2) : '—'}
+                                </td>
+                              );
+                            })}
+                            <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                              {subj.finalAve !== null ? (
+                                <span style={{
+                                  padding: '4px 12px', borderRadius: '10px',
+                                  fontSize: '13px', fontWeight: '700',
+                                  background: gc.bg, color: gc.color
+                                }}>{subj.finalAve}</span>
+                              ) : '—'}
+                            </td>
+                            <td style={{ padding: '12px 16px', fontSize: '13px', color: isFail ? '#991b1b' : '#6b7280', fontStyle: 'italic', fontWeight: isFail ? '600' : '400' }}>
+                              {isFail ? '❌ Failed term' : (subj.remarks || '—')}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -1072,7 +1226,7 @@ const StudentDashboard = () => {
   // ============ REPORT CARD ============
   const renderReportCard = () => {
     const syList = [...new Set(enrollments.map(e => e.school_year))].sort((a, b) => b.localeCompare(a));
-    
+
     if (syList.length === 0) {
       return (
         <div style={{
@@ -1128,6 +1282,34 @@ const StudentDashboard = () => {
             🖨️ Print Report Card
           </button>
         </div>
+
+        {reportData.hasFailingSubjects && (
+          <div style={{
+            background: '#fee2e2',
+            border: '2px solid #dc2626',
+            borderRadius: '12px',
+            padding: '16px 20px',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '14px'
+          }}>
+            <div style={{ fontSize: '32px', flexShrink: 0 }}>⚠️</div>
+            <div>
+              <h3 style={{ margin: '0 0 4px', fontSize: '16px', fontWeight: '700', color: '#991b1b' }}>
+                Failed Subject Warning
+              </h3>
+              <p style={{ margin: 0, fontSize: '13px', color: '#7f1d1d', lineHeight: '1.5' }}>
+                Ang mosunod nga subject(s) naay <strong>term below 75</strong>:
+                {' '}
+                <strong>
+                  {reportData.failingSubjects.map(s => s.subject).join(', ')}
+                </strong>
+                . Kailangan mag-RETAIN sa same grade level.
+              </p>
+            </div>
+          </div>
+        )}
 
         <div id="report-card" style={{
           background: 'white', borderRadius: '14px',
@@ -1191,10 +1373,9 @@ const StudentDashboard = () => {
               <thead>
                 <tr style={{ background: '#1a56db', color: 'white' }}>
                   <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '13px', fontWeight: '700', border: '1px solid #e5e7eb' }}>SUBJECTS</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', fontWeight: '700', border: '1px solid #e5e7eb', width: '70px' }}>Q1</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', fontWeight: '700', border: '1px solid #e5e7eb', width: '70px' }}>Q2</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', fontWeight: '700', border: '1px solid #e5e7eb', width: '70px' }}>Q3</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', fontWeight: '700', border: '1px solid #e5e7eb', width: '70px' }}>Q4</th>
+                  {reportData.displayHeaders.map((h, i) => (
+                    <th key={i} style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', fontWeight: '700', border: '1px solid #e5e7eb', width: '70px' }}>{h}</th>
+                  ))}
                   <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', fontWeight: '700', border: '1px solid #e5e7eb', width: '100px' }}>FINAL</th>
                   <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '13px', fontWeight: '700', border: '1px solid #e5e7eb' }}>REMARKS</th>
                 </tr>
@@ -1209,25 +1390,55 @@ const StudentDashboard = () => {
                 ) : (
                   reportData.subjects.map((subj, idx) => {
                     const gc = getGradeColor(subj.finalAve);
+                    const isFail = subj.hasFailingTerm;
+
+                    const cellValues = reportData.isOldSystem
+                      ? [subj.q1, subj.q2, subj.q3, subj.q4]
+                      : [subj.t1, subj.t2, subj.t3];
+
+                    const termKeys = reportData.isOldSystem
+                      ? ['1st Quarter', '2nd Quarter', '3rd Quarter', '4th Quarter']
+                      : ['Term 1', 'Term 2', 'Term 3'];
+
                     return (
-                      <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                        <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: '600', color: '#1f2937', border: '1px solid #e5e7eb' }}>
+                      <tr key={idx} style={{
+                        borderBottom: '1px solid #e5e7eb',
+                        background: isFail ? 'rgba(254,226,226,0.5)' : 'transparent'
+                      }}>
+                        <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: '600', color: isFail ? '#991b1b' : '#1f2937', border: '1px solid #e5e7eb' }}>
                           {subj.subject}
+                          {isFail && (
+                            <span style={{
+                              marginLeft: '6px', padding: '1px 6px',
+                              fontSize: '9px', fontWeight: '700',
+                              background: '#dc2626', color: 'white',
+                              borderRadius: '4px'
+                            }}>FAILED</span>
+                          )}
                         </td>
-                        <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '14px', color: '#374151', border: '1px solid #e5e7eb' }}>
-                          {subj.q1 ? subj.q1.toFixed(2) : '—'}
-                        </td>
-                        <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '14px', color: '#374151', border: '1px solid #e5e7eb' }}>
-                          {subj.q2 ? subj.q2.toFixed(2) : '—'}
-                        </td>
-                        <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '14px', color: '#374151', border: '1px solid #e5e7eb' }}>
-                          {subj.q3 ? subj.q3.toFixed(2) : '—'}
-                        </td>
-                        <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '14px', color: '#374151', border: '1px solid #e5e7eb' }}>
-                          {subj.q4 ? subj.q4.toFixed(2) : '—'}
-                        </td>
+                        {cellValues.map((v, i) => {
+                          const termKey = termKeys[i];
+                          const termVal = subj.termMap[termKey];
+                          const isFailingTerm = termVal !== undefined && termVal !== null && termVal < 75;
+                          return (
+                            <td
+                              key={i}
+                              style={{
+                                padding: '12px 16px',
+                                textAlign: 'center',
+                                fontSize: '14px',
+                                border: '1px solid #e5e7eb',
+                                fontWeight: isFailingTerm ? '700' : '400',
+                                color: isFailingTerm ? '#991b1b' : '#374151',
+                                background: isFailingTerm ? 'rgba(220,38,38,0.15)' : 'transparent'
+                              }}
+                            >
+                              {v !== null && v !== undefined ? parseFloat(v).toFixed(2) : '—'}
+                            </td>
+                          );
+                        })}
                         <td style={{ padding: '12px 16px', textAlign: 'center', border: '1px solid #e5e7eb' }}>
-                          {subj.finalAve ? (
+                          {subj.finalAve !== null ? (
                             <span style={{
                               padding: '4px 12px', borderRadius: '8px',
                               fontSize: '14px', fontWeight: '700',
@@ -1235,8 +1446,15 @@ const StudentDashboard = () => {
                             }}>{subj.finalAve}</span>
                           ) : '—'}
                         </td>
-                        <td style={{ padding: '12px 16px', fontSize: '13px', color: '#6b7280', fontStyle: 'italic', border: '1px solid #e5e7eb' }}>
-                          {subj.finalAve ? getRemarks(subj.finalAve) : '—'}
+                        <td style={{
+                          padding: '12px 16px',
+                          fontSize: '13px',
+                          fontStyle: 'italic',
+                          border: '1px solid #e5e7eb',
+                          color: isFail ? '#991b1b' : '#6b7280',
+                          fontWeight: isFail ? '600' : '400'
+                        }}>
+                          {subj.finalAve ? (isFail ? '❌ Failed' : getRemarks(subj.finalAve)) : '—'}
                         </td>
                       </tr>
                     );
@@ -1248,7 +1466,9 @@ const StudentDashboard = () => {
 
           {reportData.subjects.length > 0 && (
             <div style={{
-              background: 'linear-gradient(135deg, #f0f4ff, #e0e7ff)',
+              background: reportData.hasFailingSubjects
+                ? 'linear-gradient(135deg, #fee2e2, #fecaca)'
+                : 'linear-gradient(135deg, #f0f4ff, #e0e7ff)',
               padding: '20px',
               borderRadius: '10px',
               marginBottom: '24px',
@@ -1262,7 +1482,9 @@ const StudentDashboard = () => {
                 <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '500' }}>GENERAL AVERAGE</div>
                 <div style={{
                   fontSize: '32px', fontWeight: '800',
-                  color: parseFloat(reportData.overallAverage) >= 75 ? '#065f46' : '#991b1b'
+                  color: reportData.hasFailingSubjects
+                    ? '#991b1b'
+                    : (parseFloat(reportData.overallAverage) >= 75 ? '#065f46' : '#991b1b')
                 }}>
                   {reportData.overallAverage}
                 </div>
@@ -1271,14 +1493,35 @@ const StudentDashboard = () => {
                 <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '500' }}>REMARKS</div>
                 <div style={{
                   fontSize: '18px', fontWeight: '700',
-                  color: parseFloat(reportData.overallAverage) >= 75 ? '#065f46' : '#991b1b'
+                  color: reportData.hasFailingSubjects
+                    ? '#991b1b'
+                    : (parseFloat(reportData.overallAverage) >= 75 ? '#065f46' : '#991b1b')
                 }}>
-                  {parseFloat(reportData.overallAverage) >= 75 ? 'PASSED' : 'FAILED'}
+                  {reportData.hasFailingSubjects
+                    ? 'FAILED — RETAIN'
+                    : (parseFloat(reportData.overallAverage) >= 75 ? 'PASSED' : 'FAILED')}
                 </div>
                 <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '2px' }}>
-                  {getRemarks(reportData.overallAverage)}
+                  {reportData.hasFailingSubjects
+                    ? 'May term below 75'
+                    : getRemarks(reportData.overallAverage)}
                 </div>
               </div>
+            </div>
+          )}
+
+          {reportData.hasFailingSubjects && (
+            <div style={{
+              background: '#fef2f2',
+              border: '1px solid #fca5a5',
+              borderRadius: '8px',
+              padding: '12px 16px',
+              marginBottom: '24px',
+              fontSize: '12px',
+              color: '#991b1b',
+              fontWeight: '600'
+            }}>
+              📌 <strong>Policy Note:</strong> Students with ANY term below 75 must RETAIN in the same grade level. Remedial classes required before promotion.
             </div>
           )}
 
@@ -1722,16 +1965,18 @@ const StudentDashboard = () => {
               {activeMenu === 'dashboard' && `Welcome back, ${student?.first_name || 'Student'}!`}
               {activeMenu === 'grades' && 'View all your grades per school year.'}
               {activeMenu === 'reportcard' && 'View and print your official report card.'}
-              {activeMenu === 'reenrollment' && 'Apply for next grade level.'}
+              {activeMenu === 'reenrollment' && (hasFailingSubjects ? 'Retain sa same grade level.' : 'Apply for next grade level.')}
               {activeMenu === 'remarks' && 'Remarks from your teacher.'}
               {activeMenu === 'history' && 'Your enrollment records.'}
               {activeMenu === 'profile' && 'View and manage your personal information.'}
             </p>
           </div>
           <div style={{
-            background: '#dbeafe', padding: '8px 16px',
+            background: hasFailingSubjects ? '#fee2e2' : '#dbeafe',
+            padding: '8px 16px',
             borderRadius: '20px', fontSize: '13px',
-            color: '#1a56db', fontWeight: '500'
+            color: hasFailingSubjects ? '#991b1b' : '#1a56db',
+            fontWeight: '500'
           }}>
             🎓 {student?.current_grade_level || 'Student'}
           </div>
@@ -1769,35 +2014,39 @@ const StudentDashboard = () => {
             }}
           >
             <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-              <div style={{ fontSize: '56px', marginBottom: '8px' }}>🎓</div>
+              <div style={{ fontSize: '56px', marginBottom: '8px' }}>
+                {hasFailingSubjects ? '🔁' : '🎓'}
+              </div>
               <h2 style={{ fontSize: '22px', color: '#1f2937', margin: '0 0 8px' }}>
-                Re-enrollment Application
+                {hasFailingSubjects ? 'Retention Application' : 'Re-enrollment Application'}
               </h2>
               <p style={{ color: '#6b7280', fontSize: '14px', margin: 0 }}>
-                Apply for the next grade level
+                {hasFailingSubjects ? 'Retain sa same grade level' : 'Apply for the next grade level'}
               </p>
             </div>
 
-            {/* Application summary */}
             <div style={{
-              background: '#f0f4ff', padding: '16px', borderRadius: '12px',
+              background: hasFailingSubjects ? '#fef3c7' : '#f0f4ff',
+              padding: '16px', borderRadius: '12px',
               marginBottom: '16px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px'
+              display: 'flex', flexDirection: 'column', gap: '8px'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
                 <span style={{ color: '#6b7280' }}>Current:</span>
                 <strong style={{ color: '#1f2937' }}>{currentEnrollment.grade_level}</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
-                <span style={{ color: '#6b7280' }}>Applying for:</span>
-                <strong style={{ color: '#1a56db' }}>
-                  {(() => {
-                    const levels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
-                    const idx = levels.indexOf(currentEnrollment.grade_level);
-                    return idx >= 0 && idx < 5 ? levels[idx + 1] : '—';
-                  })()}
+                <span style={{ color: '#6b7280' }}>Target:</span>
+                <strong style={{ color: hasFailingSubjects ? '#92400e' : '#1a56db' }}>
+                  {hasFailingSubjects
+                    ? currentEnrollment.grade_level
+                    : (() => {
+                        const levels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
+                        const idx = levels.indexOf(currentEnrollment.grade_level);
+                        return idx >= 0 && idx < 5 ? levels[idx + 1] : '—';
+                      })()
+                  }
+                  {hasFailingSubjects && ' (Retain)'}
                 </strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
@@ -1805,13 +2054,28 @@ const StudentDashboard = () => {
                 <strong style={{ color: '#1f2937' }}>
                   {(() => {
                     const parts = currentEnrollment.school_year.split('-');
-                    return parts.length === 2 
+                    return parts.length === 2
                       ? `${parseInt(parts[0]) + 1}-${parseInt(parts[1]) + 1}`
                       : currentEnrollment.school_year;
                   })()}
                 </strong>
               </div>
             </div>
+
+            {hasFailingSubjects && (
+              <div style={{
+                background: '#fee2e2',
+                border: '1px solid #fca5a5',
+                borderRadius: '8px',
+                padding: '10px 14px',
+                marginBottom: '16px',
+                fontSize: '12px',
+                color: '#991b1b',
+                fontWeight: '600'
+              }}>
+                ⚠️ Naa kay failing term(s): {latestFailingSubjects.map(s => s.subject).join(', ')}. Retention request ni.
+              </div>
+            )}
 
             {reenrollMessage.text && (
               <div style={{
@@ -1831,7 +2095,9 @@ const StudentDashboard = () => {
               <textarea
                 value={reenrollRemarks}
                 onChange={(e) => setReenrollRemarks(e.target.value)}
-                placeholder="e.g., Ready for next grade, Complete requirements..."
+                placeholder={hasFailingSubjects
+                  ? "e.g., Gusto mag-retain kay naay bagsak..."
+                  : "e.g., Ready for next grade, Complete requirements..."}
                 rows={3}
                 disabled={reenrollSubmitting}
                 style={{
@@ -1860,12 +2126,21 @@ const StudentDashboard = () => {
                 disabled={reenrollSubmitting}
                 style={{
                   flex: 1, padding: '12px',
-                  background: reenrollSubmitting ? '#93c5fd' : 'linear-gradient(135deg, #10b981, #34d399)',
+                  background: reenrollSubmitting
+                    ? '#93c5fd'
+                    : (hasFailingSubjects
+                        ? 'linear-gradient(135deg, #f59e0b, #fbbf24)'
+                        : 'linear-gradient(135deg, #10b981, #34d399)'),
                   color: 'white', border: 'none', borderRadius: '10px',
                   fontWeight: '600', cursor: reenrollSubmitting ? 'not-allowed' : 'pointer',
                   fontSize: '14px'
                 }}
-              >{reenrollSubmitting ? 'Submitting...' : '📝 Submit Application'}</button>
+              >
+                {reenrollSubmitting
+                  ? 'Submitting...'
+                  : (hasFailingSubjects ? '🔁 Submit Retention' : '📝 Submit Application')
+                }
+              </button>
             </div>
           </div>
         </div>
