@@ -682,8 +682,6 @@ const StudentDashboard = () => {
         </div>
       </div>
 
-      {/* ✅ REMOVED: Re-enrollment Alert banner — moved to Re-enrollment page only */}
-
       {/* Quick Links */}
       <div style={{
         display: 'grid',
@@ -740,7 +738,6 @@ const StudentDashboard = () => {
     const gradeLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
     const currentIdx = currentEnrollment ? gradeLevels.indexOf(currentEnrollment.grade_level) : -1;
 
-    // ✅ RETAIN vs PROMOTE logic
     const isRetained = hasFailingSubjects;
     const targetGrade = isRetained
       ? currentEnrollment?.grade_level
@@ -1746,28 +1743,28 @@ const StudentDashboard = () => {
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
             <div>
-              <label style={{ fontSize: '13px', color: '#374151', fontWeight: '500' }}>First Name</label>
-              <input type="text" name="first_name" value={editData.first_name} onChange={handleEditChange}
+              <label style={{ fontSize: '13px', color: '#374151', fontWeight: '500' }}>First Name <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 20)</small></label>
+              <input type="text" name="first_name" value={editData.first_name} onChange={handleEditChange} maxLength={20}
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px', marginTop: '4px', boxSizing: 'border-box' }} />
             </div>
             <div>
-              <label style={{ fontSize: '13px', color: '#374151', fontWeight: '500' }}>Middle Name</label>
-              <input type="text" name="middle_name" value={editData.middle_name} onChange={handleEditChange}
+              <label style={{ fontSize: '13px', color: '#374151', fontWeight: '500' }}>Middle Name <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 20)</small></label>
+              <input type="text" name="middle_name" value={editData.middle_name} onChange={handleEditChange} maxLength={20}
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px', marginTop: '4px', boxSizing: 'border-box' }} />
             </div>
             <div>
-              <label style={{ fontSize: '13px', color: '#374151', fontWeight: '500' }}>Last Name</label>
-              <input type="text" name="last_name" value={editData.last_name} onChange={handleEditChange}
+              <label style={{ fontSize: '13px', color: '#374151', fontWeight: '500' }}>Last Name <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 20)</small></label>
+              <input type="text" name="last_name" value={editData.last_name} onChange={handleEditChange} maxLength={20}
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px', marginTop: '4px', boxSizing: 'border-box' }} />
             </div>
             <div>
-              <label style={{ fontSize: '13px', color: '#374151', fontWeight: '500' }}>Contact Number</label>
-              <input type="text" name="contact_number" value={editData.contact_number} onChange={handleEditChange}
+              <label style={{ fontSize: '13px', color: '#374151', fontWeight: '500' }}>Contact Number <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 15)</small></label>
+              <input type="text" name="contact_number" value={editData.contact_number} onChange={handleEditChange} maxLength={15}
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px', marginTop: '4px', boxSizing: 'border-box' }} />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ fontSize: '13px', color: '#374151', fontWeight: '500' }}>Address</label>
-              <textarea name="address" value={editData.address} onChange={handleEditChange} rows="2"
+              <label style={{ fontSize: '13px', color: '#374151', fontWeight: '500' }}>Address <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 50)</small></label>
+              <textarea name="address" value={editData.address} onChange={handleEditChange} maxLength={50} rows="2"
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px', marginTop: '4px', resize: 'vertical', boxSizing: 'border-box' }} />
             </div>
           </div>

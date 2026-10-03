@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
 const HomePage = () => {
@@ -35,6 +35,30 @@ const HomePage = () => {
       });
     }
   };
+
+  // ✅ UPDATED: Elementary-focused services
+  const services = [
+    {
+      icon: '📚',
+      title: 'Primary Education',
+      desc: 'Grades 1–3 — Building foundational skills in literacy, numeracy, and values formation aligned with DepEd K-12 curriculum.'
+    },
+    {
+      icon: '🔬',
+      title: 'Intermediate Education',
+      desc: 'Grades 4–6 — Advanced academic subjects, critical thinking, and preparation for junior high school.'
+    },
+    {
+      icon: '🏆',
+      title: 'Academic Excellence',
+      desc: 'Recognizing outstanding learners under DepEd Order No. 36, s. 2016 — With Highest Honors, High Honors, and With Honors.'
+    },
+    {
+      icon: '💻',
+      title: 'Digital Learning',
+      desc: 'ICT-integrated lessons, online student portal, and modern tools preparing learners for a digital-first future.'
+    }
+  ];
 
   return (
     <div style={{
@@ -161,9 +185,7 @@ const HomePage = () => {
         </div>
       </nav>
 
-      {/* ========================================== */}
       {/* HERO SECTION */}
-      {/* ========================================== */}
       <section id="home" style={{
         minHeight: '100vh',
         display: 'flex',
@@ -320,9 +342,7 @@ const HomePage = () => {
         </div>
       </section>
 
-      {/* ========================================== */}
-      {/* SERVICES SECTION */}
-      {/* ========================================== */}
+      {/* ✅ UPDATED SERVICES SECTION */}
       <section id="services" style={{
         padding: '80px 40px',
         minHeight: '100vh',
@@ -345,7 +365,7 @@ const HomePage = () => {
             fontSize: '18px',
             marginBottom: '50px'
           }}>
-            Quality early childhood education and development programs for children ages 4-5
+            Comprehensive DepEd K-12 aligned programs for Grades 1 through 6
           </p>
 
           <div style={{
@@ -353,128 +373,40 @@ const HomePage = () => {
             gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
             gap: '30px'
           }}>
-            {/* Service 1: Early Education */}
-            <div style={{
-              background: 'rgba(255,255,255,0.12)',
-              backdropFilter: 'blur(10px)',
-              padding: '30px',
-              borderRadius: '16px',
-              textAlign: 'center',
-              border: '1px solid rgba(255,255,255,0.15)',
-              boxShadow: '0 8px 30px rgba(0,0,0,0.1)',
-              transition: 'all 0.4s ease',
-              cursor: 'pointer'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-10px) scale(1.02)';
-              e.currentTarget.style.boxShadow = '0 15px 50px rgba(0,0,0,0.2)';
-              e.currentTarget.style.background = 'rgba(255,255,255,0.25)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0) scale(1)';
-              e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.1)';
-              e.currentTarget.style.background = 'rgba(255,255,255,0.12)';
-            }}>
-              <div style={{ fontSize: '48px', marginBottom: '12px' }}>📚</div>
-              <h3 style={{ fontSize: '20px', color: 'white', marginBottom: '8px' }}>Early Education</h3>
-              <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '14px' }}>
-                Preschool and kindergarten programs for children ages 4-5. Foundational skills in literacy, numeracy, and social development.
-              </p>
-            </div>
-
-            {/* Service 2: Creative Development */}
-            <div style={{
-              background: 'rgba(255,255,255,0.12)',
-              backdropFilter: 'blur(10px)',
-              padding: '30px',
-              borderRadius: '16px',
-              textAlign: 'center',
-              border: '1px solid rgba(255,255,255,0.15)',
-              boxShadow: '0 8px 30px rgba(0,0,0,0.1)',
-              transition: 'all 0.4s ease',
-              cursor: 'pointer'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-10px) scale(1.02)';
-              e.currentTarget.style.boxShadow = '0 15px 50px rgba(0,0,0,0.2)';
-              e.currentTarget.style.background = 'rgba(255,255,255,0.25)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0) scale(1)';
-              e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.1)';
-              e.currentTarget.style.background = 'rgba(255,255,255,0.12)';
-            }}>
-              <div style={{ fontSize: '48px', marginBottom: '12px' }}>🎨</div>
-              <h3 style={{ fontSize: '20px', color: 'white', marginBottom: '8px' }}>Creative Development</h3>
-              <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '14px' }}>
-                Arts, music, and creative activities that encourage self-expression, imagination, and fine motor skills.
-              </p>
-            </div>
-
-            {/* Service 3: Cognitive Learning */}
-            <div style={{
-              background: 'rgba(255,255,255,0.12)',
-              backdropFilter: 'blur(10px)',
-              padding: '30px',
-              borderRadius: '16px',
-              textAlign: 'center',
-              border: '1px solid rgba(255,255,255,0.15)',
-              boxShadow: '0 8px 30px rgba(0,0,0,0.1)',
-              transition: 'all 0.4s ease',
-              cursor: 'pointer'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-10px) scale(1.02)';
-              e.currentTarget.style.boxShadow = '0 15px 50px rgba(0,0,0,0.2)';
-              e.currentTarget.style.background = 'rgba(255,255,255,0.25)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0) scale(1)';
-              e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.1)';
-              e.currentTarget.style.background = 'rgba(255,255,255,0.12)';
-            }}>
-              <div style={{ fontSize: '48px', marginBottom: '12px' }}>🧠</div>
-              <h3 style={{ fontSize: '20px', color: 'white', marginBottom: '8px' }}>Cognitive Learning</h3>
-              <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '14px' }}>
-                Interactive and engaging learning methods that develop critical thinking, problem-solving, and curiosity.
-              </p>
-            </div>
-
-            {/* Service 4: Parent Support */}
-            <div style={{
-              background: 'rgba(255,255,255,0.12)',
-              backdropFilter: 'blur(10px)',
-              padding: '30px',
-              borderRadius: '16px',
-              textAlign: 'center',
-              border: '1px solid rgba(255,255,255,0.15)',
-              boxShadow: '0 8px 30px rgba(0,0,0,0.1)',
-              transition: 'all 0.4s ease',
-              cursor: 'pointer'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-10px) scale(1.02)';
-              e.currentTarget.style.boxShadow = '0 15px 50px rgba(0,0,0,0.2)';
-              e.currentTarget.style.background = 'rgba(255,255,255,0.25)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0) scale(1)';
-              e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.1)';
-              e.currentTarget.style.background = 'rgba(255,255,255,0.12)';
-            }}>
-              <div style={{ fontSize: '48px', marginBottom: '12px' }}>🤝</div>
-              <h3 style={{ fontSize: '20px', color: 'white', marginBottom: '8px' }}>Parent Support</h3>
-              <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '14px' }}>
-                Support programs for parents including seminars, child development workshops, and regular progress updates.
-              </p>
-            </div>
+            {services.map((service, index) => (
+              <div key={index} style={{
+                background: 'rgba(255,255,255,0.12)',
+                backdropFilter: 'blur(10px)',
+                padding: '30px',
+                borderRadius: '16px',
+                textAlign: 'center',
+                border: '1px solid rgba(255,255,255,0.15)',
+                boxShadow: '0 8px 30px rgba(0,0,0,0.1)',
+                transition: 'all 0.4s ease',
+                cursor: 'pointer'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-10px) scale(1.02)';
+                e.currentTarget.style.boxShadow = '0 15px 50px rgba(0,0,0,0.2)';
+                e.currentTarget.style.background = 'rgba(255,255,255,0.25)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.1)';
+                e.currentTarget.style.background = 'rgba(255,255,255,0.12)';
+              }}>
+                <div style={{ fontSize: '48px', marginBottom: '12px' }}>{service.icon}</div>
+                <h3 style={{ fontSize: '20px', color: 'white', marginBottom: '8px' }}>{service.title}</h3>
+                <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '14px', lineHeight: 1.6 }}>
+                  {service.desc}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* ========================================== */}
-      {/* ABOUT SECTION */}
-      {/* ========================================== */}
+      {/* ✅ UPDATED ABOUT SECTION */}
       <section id="about" style={{
         padding: '80px 40px',
         minHeight: '100vh',
@@ -502,12 +434,13 @@ const HomePage = () => {
               About <span style={{ color: '#fcd34d' }}>NCDC</span>
             </h2>
             <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '16px', lineHeight: '1.8', marginBottom: '16px' }}>
-              The <strong style={{ color: 'white' }}>National Children Development Center (NCDC)</strong> is dedicated to providing 
-              quality early childhood education and development programs for children ages 4 to 5 years old.
+              The <strong style={{ color: 'white' }}>National Child Development Center (NCDC)</strong> is
+              a DepEd-aligned elementary school committed to providing quality education for
+              <strong style={{ color: 'white' }}> Grades 1 through 6</strong>.
             </p>
             <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '16px', lineHeight: '1.8' }}>
-              Our mission is to nurture young minds through creative, cognitive, and social development 
-              in a safe and supportive environment.
+              Our mission is to foster academic excellence, character development, and lifelong
+              learning in a safe, inclusive, and technology-driven environment.
             </p>
           </div>
           <div style={{
@@ -535,9 +468,7 @@ const HomePage = () => {
         </div>
       </section>
 
-      {/* ========================================== */}
       {/* CONTACT SECTION */}
-      {/* ========================================== */}
       <section id="contact" style={{
         padding: '80px 40px',
         minHeight: '100vh',
@@ -558,9 +489,9 @@ const HomePage = () => {
             gap: '30px'
           }}>
             {[
-              { icon: '📍', title: 'Address', detail: 'Poblacion, Sevilla,Bohol' },
+              { icon: '📍', title: 'Address', detail: 'Poblacion, Sevilla, Bohol' },
               { icon: '📧', title: 'Email', detail: 'info@ncdc.edu.ph' },
-              { icon: '📞', title: 'Phone', detail: '+63 (2) 8123-4567' }
+              { icon: '📞', title: 'Phone', detail: '09155085815' }
             ].map((item, index) => (
               <div key={index} style={{
                 background: 'rgba(255,255,255,0.12)',
@@ -590,9 +521,7 @@ const HomePage = () => {
         </div>
       </section>
 
-      {/* ========================================== */}
       {/* FOOTER */}
-      {/* ========================================== */}
       <footer style={{
         background: 'rgba(0,0,0,0.2)',
         backdropFilter: 'blur(10px)',

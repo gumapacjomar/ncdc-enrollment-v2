@@ -10,6 +10,8 @@ const GradeReports = () => {
     const [failingStudents, setFailingStudents] = useState([]);
     const [promotionList, setPromotionList] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
+    const [filterSY, setFilterSY] = useState('');
+    const [availableSYs, setAvailableSYs] = useState([]);
     const [activeTab, setActiveTab] = useState('failing'); // 'failing' | 'promotion'
     const [profilePic, setProfilePic] = useState(null);
 
@@ -47,8 +49,25 @@ const GradeReports = () => {
                 API.get('/admin/reports/failing-students').catch(() => ({ data: [] })),
                 API.get('/admin/reports/promotion-list').catch(() => ({ data: [] }))
             ]);
-            setFailingStudents(failingRes.data || []);
-            setPromotionList(promotionRes.data || []);
+
+            const failing = failingRes.data || [];
+            const promotion = promotionRes.data || [];
+
+            setFailingStudents(failing);
+            setPromotionList(promotion);
+
+            // Collect unique SYs (from both lists)
+            const sySet = new Set();
+            [...failing, ...promotion].forEach(s => {
+                if (s.school_year) sySet.add(s.school_year);
+            });
+            const syList = Array.from(sySet).sort((a, b) => b.localeCompare(a));
+            setAvailableSYs(syList);
+
+            // Default: latest SY
+            if (syList.length > 0 && !filterSY) {
+                setFilterSY(syList[0]);
+            }
         } catch (error) {
             console.error('Error fetching grade reports:', error);
         } finally {
@@ -75,13 +94,25 @@ const GradeReports = () => {
         navigate('/login');
     };
 
+    // ✅ Filter by search + SY
     const filterData = (data) => {
-        if (!searchTerm.trim()) return data;
-        const search = searchTerm.toLowerCase();
-        return data.filter(s => {
-            const name = `${s.first_name} ${s.middle_name || ''} ${s.last_name}`.toLowerCase();
-            return name.includes(search) || (s.public_id || '').toLowerCase().includes(search);
-        });
+        let filtered = data;
+
+        // Filter by SY (if selected)
+        if (filterSY) {
+            filtered = filtered.filter(s => s.school_year === filterSY);
+        }
+
+        // Filter by search
+        if (searchTerm.trim()) {
+            const search = searchTerm.toLowerCase();
+            filtered = filtered.filter(s => {
+                const name = `${s.first_name} ${s.middle_name || ''} ${s.last_name}`.toLowerCase();
+                return name.includes(search) || (s.public_id || '').toLowerCase().includes(search);
+            });
+        }
+
+        return filtered;
     };
 
     const renderFailingView = () => {
@@ -95,7 +126,7 @@ const GradeReports = () => {
                 }}>
                     <div style={{ fontSize: '64px', marginBottom: '12px' }}>🎉</div>
                     <h3 style={{ color: '#1f2937', marginBottom: '8px' }}>No Failing Students</h3>
-                    <p>All students are performing well (average ≥ 75).</p>
+                    <p>All students are performing well (walay term below 75).</p>
                 </div>
             );
         }
@@ -115,7 +146,7 @@ const GradeReports = () => {
                         ❌ Failing Students ({filtered.length})
                     </h3>
                     <p style={{ margin: '4px 0 0', fontSize: '13px', opacity: 0.9 }}>
-                        Students with average grade below 75
+                        Students with <strong>ANY term below 75</strong> (Retain same grade level)
                     </p>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
@@ -126,14 +157,19 @@ const GradeReports = () => {
                                 <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Student ID</th>
                                 <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Name</th>
                                 <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Grade & Section</th>
+                                <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>School Year</th>
                                 <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Average</th>
+                                <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Lowest</th>
                                 <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Subjects</th>
                                 <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             {filtered.map((student, idx) => (
-                                <tr key={student.student_id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                <tr key={`${student.student_id}-${student.school_year || idx}`} style={{
+                                    borderBottom: '1px solid #f3f4f6',
+                                    background: 'rgba(254,226,226,0.3)'
+                                }}>
                                     <td style={{ padding: '12px 16px', fontSize: '14px', color: '#6b7280' }}>{idx + 1}</td>
                                     <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: '600', color: '#1a56db' }}>
                                         {student.public_id || '—'}
@@ -144,6 +180,9 @@ const GradeReports = () => {
                                     <td style={{ padding: '12px 16px', fontSize: '13px', color: '#6b7280' }}>
                                         {student.current_grade_level || '—'} {student.current_section ? `- ${student.current_section}` : ''}
                                     </td>
+                                    <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', color: '#6b7280', fontWeight: '600' }}>
+                                        {student.school_year || '—'}
+                                    </td>
                                     <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                                         <span style={{
                                             padding: '6px 14px', borderRadius: '12px',
@@ -151,6 +190,15 @@ const GradeReports = () => {
                                             background: '#fee2e2', color: '#991b1b'
                                         }}>
                                             {parseFloat(student.average_grade || 0).toFixed(2)}
+                                        </span>
+                                    </td>
+                                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                                        <span style={{
+                                            padding: '6px 14px', borderRadius: '12px',
+                                            fontSize: '14px', fontWeight: '700',
+                                            background: '#fecaca', color: '#7f1d1d'
+                                        }}>
+                                            {student.lowest_grade ? parseFloat(student.lowest_grade).toFixed(2) : '—'}
                                         </span>
                                     </td>
                                     <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '14px', color: '#6b7280' }}>
@@ -187,10 +235,18 @@ const GradeReports = () => {
                 }}>
                     <div style={{ fontSize: '64px', marginBottom: '12px' }}>📭</div>
                     <h3 style={{ color: '#1f2937', marginBottom: '8px' }}>No Promotion Data</h3>
-                    <p>No enrollment records found for the current school year.</p>
+                    <p>No enrollment records found{filterSY ? ` for SY ${filterSY}` : ''}.</p>
                 </div>
             );
         }
+
+        // ✅ Sort: FAILED first, then by average desc
+        const sorted = [...filtered].sort((a, b) => {
+            if (a.promotion_status !== b.promotion_status) {
+                return a.promotion_status === 'FAILED' ? -1 : 1;
+            }
+            return (b.average_grade || 0) - (a.average_grade || 0);
+        });
 
         return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -203,8 +259,11 @@ const GradeReports = () => {
                     }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
-                                <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '500' }}>PASSED</div>
+                                <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '500' }}>PROMOTED</div>
                                 <div style={{ fontSize: '32px', fontWeight: '800', color: '#065f46' }}>{passed.length}</div>
+                                <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
+                                    Walay term below 75
+                                </div>
                             </div>
                             <div style={{ fontSize: '36px', opacity: 0.6 }}>✅</div>
                         </div>
@@ -216,12 +275,27 @@ const GradeReports = () => {
                     }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
-                                <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '500' }}>FAILED</div>
+                                <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '500' }}>RETAINED</div>
                                 <div style={{ fontSize: '32px', fontWeight: '800', color: '#991b1b' }}>{failed.length}</div>
+                                <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
+                                    Naa'y term below 75
+                                </div>
                             </div>
                             <div style={{ fontSize: '36px', opacity: 0.6 }}>❌</div>
                         </div>
                     </div>
+                </div>
+
+                {/* Policy Note */}
+                <div style={{
+                    background: '#fff3cd',
+                    padding: '12px 18px',
+                    borderRadius: '10px',
+                    border: '1px solid #ffc107',
+                    fontSize: '13px',
+                    color: '#92400e'
+                }}>
+                    <strong>⚠️ Promotion Policy:</strong> Students with <em>ANY term below 75</em> must <strong>RETAIN</strong> in the same grade level. No conditional promotion.
                 </div>
 
                 {/* Table */}
@@ -236,10 +310,10 @@ const GradeReports = () => {
                         color: 'white'
                     }}>
                         <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>
-                            📊 Promotion List ({filtered.length})
+                            📊 Promotion List ({sorted.length})
                         </h3>
                         <p style={{ margin: '4px 0 0', fontSize: '13px', opacity: 0.9 }}>
-                            Students qualified for promotion (average ≥ 75)
+                            Students with ANY term below 75 = RETAINED | No failing terms = PROMOTED
                         </p>
                     </div>
                     <div style={{ overflowX: 'auto' }}>
@@ -250,48 +324,62 @@ const GradeReports = () => {
                                     <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Student ID</th>
                                     <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Name</th>
                                     <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Grade</th>
+                                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>School Year</th>
                                     <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Average</th>
+                                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Lowest</th>
                                     <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Status</th>
                                     <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {filtered.map((student, idx) => (
-                                    <tr key={`${student.student_id}-${idx}`} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                        <td style={{ padding: '12px 16px', fontSize: '14px', color: '#6b7280' }}>{idx + 1}</td>
-                                        <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: '600', color: '#1a56db' }}>
-                                            {student.public_id || '—'}
-                                        </td>
-                                        <td style={{ padding: '12px 16px', fontSize: '14px', color: '#1f2937', fontWeight: '500' }}>
-                                            {student.first_name} {student.middle_name || ''} {student.last_name}
-                                        </td>
-                                        <td style={{ padding: '12px 16px', fontSize: '13px', color: '#6b7280' }}>
-                                            {student.current_grade_level || '—'} {student.current_section ? `- ${student.current_section}` : ''}
-                                        </td>
-                                        <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '14px', fontWeight: '600', color: '#1f2937' }}>
-                                            {student.average_grade ? parseFloat(student.average_grade).toFixed(2) : '—'}
-                                        </td>
-                                        <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                                            <span style={{
-                                                padding: '6px 14px', borderRadius: '12px',
-                                                fontSize: '12px', fontWeight: '700',
-                                                background: student.promotion_status === 'PASSED' ? '#d1fae5' : '#fee2e2',
-                                                color: student.promotion_status === 'PASSED' ? '#065f46' : '#991b1b'
-                                            }}>
-                                                {student.promotion_status}
-                                            </span>
-                                        </td>
-                                        <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                                            <Link to={`/admin/student-history?studentId=${student.student_id}`} style={{
-                                                background: '#dbeafe', color: '#1a56db',
-                                                textDecoration: 'none', padding: '6px 14px',
-                                                borderRadius: '6px', fontSize: '12px', fontWeight: '600'
-                                            }}>
-                                                👁️ View
-                                            </Link>
-                                        </td>
-                                    </tr>
-                                ))}
+                                {sorted.map((student, idx) => {
+                                    const isFailed = student.promotion_status === 'FAILED';
+                                    return (
+                                        <tr key={`${student.student_id}-${student.school_year || idx}`} style={{
+                                            borderBottom: '1px solid #f3f4f6',
+                                            background: isFailed ? 'rgba(254,226,226,0.4)' : 'transparent'
+                                        }}>
+                                            <td style={{ padding: '12px 16px', fontSize: '14px', color: '#6b7280' }}>{idx + 1}</td>
+                                            <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: '600', color: '#1a56db' }}>
+                                                {student.public_id || '—'}
+                                            </td>
+                                            <td style={{ padding: '12px 16px', fontSize: '14px', color: '#1f2937', fontWeight: '500' }}>
+                                                {student.first_name} {student.middle_name || ''} {student.last_name}
+                                            </td>
+                                            <td style={{ padding: '12px 16px', fontSize: '13px', color: '#6b7280' }}>
+                                                {student.current_grade_level || '—'} {student.current_section ? `- ${student.current_section}` : ''}
+                                            </td>
+                                            <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', color: '#6b7280', fontWeight: '600' }}>
+                                                {student.school_year || '—'}
+                                            </td>
+                                            <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '14px', fontWeight: '600', color: '#1f2937' }}>
+                                                {student.average_grade ? parseFloat(student.average_grade).toFixed(2) : '—'}
+                                            </td>
+                                            <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '14px', fontWeight: '700', color: isFailed ? '#991b1b' : '#065f46' }}>
+                                                {student.lowest_grade ? parseFloat(student.lowest_grade).toFixed(2) : '—'}
+                                            </td>
+                                            <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                                                <span style={{
+                                                    padding: '6px 14px', borderRadius: '12px',
+                                                    fontSize: '12px', fontWeight: '700',
+                                                    background: isFailed ? '#fee2e2' : '#d1fae5',
+                                                    color: isFailed ? '#991b1b' : '#065f46'
+                                                }}>
+                                                    {isFailed ? '❌ RETAINED' : '✅ PROMOTED'}
+                                                </span>
+                                            </td>
+                                            <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                                                <Link to={`/admin/student-history?studentId=${student.student_id}`} style={{
+                                                    background: '#dbeafe', color: '#1a56db',
+                                                    textDecoration: 'none', padding: '6px 14px',
+                                                    borderRadius: '6px', fontSize: '12px', fontWeight: '600'
+                                                }}>
+                                                    👁️ View
+                                                </Link>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
@@ -439,18 +527,18 @@ const GradeReports = () => {
                         📉 Grade Reports
                     </h1>
                     <p style={{ color: '#6b7280', marginTop: '4px', fontSize: '15px' }}>
-                        Failing students and promotion candidates
+                        Failing students and promotion candidates (ANY term below 75 = FAILED)
                     </p>
                 </div>
 
-                {/* Search + Tabs */}
+                {/* Search + SY Filter + Tabs */}
                 <div style={{
                     background: 'white', padding: '16px 20px', borderRadius: '12px',
                     marginBottom: '24px', border: '1px solid #e5e7eb',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
                     display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center'
                 }}>
-                    <div style={{ flex: 1, minWidth: '250px' }}>
+                    <div style={{ flex: 1, minWidth: '200px' }}>
                         <input
                             type="text"
                             placeholder="🔍 Search by name or ID..."
@@ -472,6 +560,32 @@ const GradeReports = () => {
                             }}
                         />
                     </div>
+
+                    {/* ✅ SY Filter */}
+                    {availableSYs.length > 0 && (
+                        <div>
+                            <label style={{ marginRight: '8px', fontSize: '13px', color: '#6b7280', fontWeight: '600' }}>
+                                📅 SY:
+                            </label>
+                            <select
+                                value={filterSY}
+                                onChange={(e) => setFilterSY(e.target.value)}
+                                style={{
+                                    padding: '10px 14px', borderRadius: '8px',
+                                    border: '1px solid #e5e7eb', fontSize: '14px',
+                                    outline: 'none', fontWeight: '600',
+                                    color: '#1f2937', background: '#f9fafb',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                <option value="">All SY</option>
+                                {availableSYs.map(sy => (
+                                    <option key={sy} value={sy}>{sy}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
                     <div style={{ display: 'flex', gap: '8px' }}>
                         {[
                             { id: 'failing', label: '❌ Failing Students' },

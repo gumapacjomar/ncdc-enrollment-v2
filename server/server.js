@@ -139,22 +139,78 @@ console.log('📧 Email service: Disabled');
 // =============================================
 // HELPER FUNCTIONS
 // =============================================
+
+// =============================================
+// ✅ ATOMIC ID GENERATOR (Race-condition safe)
+// Uses MySQL's LAST_INSERT_ID for atomic increment
+// =============================================
 const generateStudentId = () => {
     return new Promise((resolve, reject) => {
-        const query = `SELECT student_id FROM students WHERE student_id IS NOT NULL ORDER BY id DESC LIMIT 1`;
-        db.query(query, (err, results) => {
+        // ✅ Atomic increment: UPDATE + LAST_INSERT_ID in one query
+        const updateQuery = `
+            UPDATE counters
+            SET value = LAST_INSERT_ID(value + 1)
+            WHERE name = 'student_id'
+        `;
+
+        db.query(updateQuery, (err, result) => {
             if (err) return reject(err);
-            
-            if (results.length === 0 || !results[0].student_id) {
-                return resolve('NCDC-000001');
+
+            if (result.affectedRows === 0) {
+                return reject(new Error('student_id counter not initialized. Please run the counters table setup.'));
             }
-            
-            const lastId = results[0].student_id;
-            const num = parseInt(lastId.split('-')[1]) + 1;
-            const padded = String(num).padStart(6, '0');
-            resolve(`NCDC-${padded}`);
+
+            // ✅ Get the atomic incremented value (connection-scoped)
+            db.query('SELECT LAST_INSERT_ID() as new_id', (err, rows) => {
+                if (err) return reject(err);
+
+                const newId = rows[0].new_id;
+                const padded = String(newId).padStart(6, '0');
+                resolve(`NCDC-${padded}`);
+            });
         });
     });
+};
+
+// =============================================
+// ✅ FIELD LENGTH VALIDATION HELPER (Option C)
+// Names: 20 | Contact: 15 | Email: 30 | Address: 50 | Suffix: 10
+// =============================================
+const FIELD_LIMITS = {
+    firstName: { max: 20, label: 'First Name' },
+    middleName: { max: 20, label: 'Middle Name' },
+    lastName: { max: 20, label: 'Last Name' },
+    suffix: { max: 10, label: 'Suffix' },
+    contactNumber: { max: 15, label: 'Contact Number' },
+    email: { max: 30, label: 'Email' },
+    address: { max: 50, label: 'Address' },
+    fatherName: { max: 20, label: 'Father Name' },
+    motherName: { max: 20, label: 'Mother Name' },
+    guardianName: { max: 20, label: 'Guardian Name' },
+    fatherOccupation: { max: 30, label: 'Father Occupation' },
+    motherOccupation: { max: 30, label: 'Mother Occupation' },
+    fatherContact: { max: 15, label: 'Father Contact' },
+    motherContact: { max: 15, label: 'Mother Contact' },
+    guardianContact: { max: 15, label: 'Guardian Contact' },
+    first_name: { max: 20, label: 'First Name' },
+    middle_name: { max: 20, label: 'Middle Name' },
+    last_name: { max: 20, label: 'Last Name' },
+    contact_number: { max: 15, label: 'Contact Number' },
+    username: { max: 20, label: 'Username' },
+    employee_id: { max: 20, label: 'Employee ID' },
+    employeeId: { max: 20, label: 'Employee ID' },
+    position: { max: 30, label: 'Position' },
+    department: { max: 30, label: 'Department' }
+};
+
+const validateFieldLengths = (data) => {
+    for (const [field, limits] of Object.entries(FIELD_LIMITS)) {
+        const value = data[field];
+        if (value && typeof value === 'string' && value.trim().length > limits.max) {
+            return `${limits.label} is too long. Maximum ${limits.max} characters allowed (got ${value.trim().length}).`;
+        }
+    }
+    return null;
 };
 
 // =============================================
@@ -175,6 +231,11 @@ app.post('/api/apply', upload.fields([
     { name: 'idPicture', maxCount: 1 }
 ]), async (req, res) => {
     try {
+        const lengthError = validateFieldLengths(req.body);
+        if (lengthError) {
+            return res.status(400).json({ error: lengthError });
+        }
+
         const {
             firstName, middleName, lastName, suffix,
             birthDate, gender, address, contactNumber, email,
@@ -220,7 +281,7 @@ app.post('/api/apply', upload.fields([
                 return res.status(400).json({ error: 'Email already registered' });
             }
 
-            const username = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`.replace(/[^a-z0-9.]/g, '');
+            const username = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`.replace(/[^a-z0-9.]/g, '').slice(0, 20);
             const defaultPassword = Math.random().toString(36).slice(-8);
             
             bcrypt.hash(defaultPassword, 10, (err, hashedPassword) => {
@@ -309,6 +370,11 @@ app.post('/api/registrar/apply-walkin', upload.fields([
     { name: 'idPicture', maxCount: 1 }
 ]), async (req, res) => {
     try {
+        const lengthError = validateFieldLengths(req.body);
+        if (lengthError) {
+            return res.status(400).json({ error: lengthError });
+        }
+
         const {
             firstName, middleName, lastName, suffix,
             birthDate, gender, address, contactNumber, email,
@@ -355,7 +421,7 @@ app.post('/api/registrar/apply-walkin', upload.fields([
                 return res.status(400).json({ error: 'Email already registered' });
             }
 
-            const username = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`.replace(/[^a-z0-9.]/g, '');
+            const username = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`.replace(/[^a-z0-9.]/g, '').slice(0, 20);
             const defaultPassword = Math.random().toString(36).slice(-8);
             
             bcrypt.hash(defaultPassword, 10, (err, hashedPassword) => {
@@ -781,7 +847,7 @@ app.get('/api/admin/approved', (req, res) => {
 });
 
 // =============================================
-// 8. ADMIN - Confirm Enrollment
+// 8. ADMIN - Confirm Enrollment (Atomic ID)
 // =============================================
 app.post('/api/admin/confirm/:id', async (req, res) => {
     const applicationId = req.params.id;
@@ -811,7 +877,17 @@ app.post('/api/admin/confirm/:id', async (req, res) => {
             const student = results[0];
             console.log('✅ Student:', student.first_name, student.last_name);
 
-            const studentId = await generateStudentId();
+            // ✅ Atomic ID generation — guaranteed unique, no race condition
+            let studentId;
+            try {
+                studentId = await generateStudentId();
+            } catch (idErr) {
+                console.error('❌ Failed to generate student ID:', idErr);
+                return res.status(500).json({
+                    error: 'Failed to generate student ID. Please run the counters setup or try again.'
+                });
+            }
+
             console.log('✅ Student ID:', studentId);
 
             const defaultPassword = studentId.replace('NCDC-', '');
@@ -1035,6 +1111,11 @@ app.get('/api/admin/registrars', (req, res) => {
 });
 
 app.post('/api/admin/registrars', async (req, res) => {
+    const lengthError = validateFieldLengths(req.body);
+    if (lengthError) {
+        return res.status(400).json({ error: lengthError });
+    }
+
     const { employeeId, firstName, lastName, username, email, password, department } = req.body;
 
     if (!employeeId || !firstName || !lastName || !username || !email || !password) {
@@ -1083,6 +1164,11 @@ app.post('/api/admin/registrars', async (req, res) => {
 });
 
 app.put('/api/admin/registrars/:id', async (req, res) => {
+    const lengthError = validateFieldLengths(req.body);
+    if (lengthError) {
+        return res.status(400).json({ error: lengthError });
+    }
+
     const id = req.params.id;
     const { employeeId, firstName, lastName, username, email, department } = req.body;
 
@@ -1199,6 +1285,11 @@ app.post('/api/student/change-password', async (req, res) => {
 // 17. STUDENT - Update Profile
 // =============================================
 app.put('/api/student/update-profile/:id', (req, res) => {
+    const lengthError = validateFieldLengths(req.body);
+    if (lengthError) {
+        return res.status(400).json({ error: lengthError });
+    }
+
     const studentId = req.params.id;
     const { first_name, middle_name, last_name, contact_number, address } = req.body;
 
@@ -1420,6 +1511,11 @@ app.get('/api/admin/profile/:id', (req, res) => {
 // 25. ADMIN - Update Profile
 // =============================================
 app.put('/api/admin/profile/:id', profileUpload.single('profile_pic'), (req, res) => {
+    const lengthError = validateFieldLengths(req.body);
+    if (lengthError) {
+        return res.status(400).json({ error: lengthError });
+    }
+
     const userId = req.params.id;
     const { first_name, last_name, email, employee_id, position, department } = req.body;
     const profilePic = req.file ? req.file.filename : null;
@@ -1477,6 +1573,11 @@ app.get('/api/registrar/profile/:id', (req, res) => {
 // 27. REGISTRAR - Update Profile
 // =============================================
 app.put('/api/registrar/profile/:id', profileUpload.single('profile_pic'), (req, res) => {
+    const lengthError = validateFieldLengths(req.body);
+    if (lengthError) {
+        return res.status(400).json({ error: lengthError });
+    }
+
     const userId = req.params.id;
     const { first_name, last_name, email, employee_id, department } = req.body;
     const profilePic = req.file ? req.file.filename : null;
@@ -1558,6 +1659,11 @@ app.post('/api/change-password', async (req, res) => {
 // 29. REGISTRAR - Update Application Details
 // =============================================
 app.put('/api/registrar/application/:id', (req, res) => {
+    const lengthError = validateFieldLengths(req.body);
+    if (lengthError) {
+        return res.status(400).json({ error: lengthError });
+    }
+
     const applicationId = req.params.id;
     const {
         first_name, middle_name, last_name, suffix,
@@ -2153,7 +2259,7 @@ app.get('/api/registrar/enrollments/student/:studentId', (req, res) => {
 });
 
 // =============================================
-// 46. ENROLLMENTS - Create New Enrollment ✅ AUTO-UPDATE STUDENT
+// 46. ENROLLMENTS - Create New Enrollment
 // =============================================
 app.post('/api/registrar/enrollments', (req, res) => {
     const { student_id, grade_level, section_id, school_year, semester, remarks } = req.body;
@@ -2222,7 +2328,7 @@ app.post('/api/registrar/enrollments', (req, res) => {
 });
 
 // =============================================
-// 47. ENROLLMENTS - Update Enrollment ✅ AUTO-UPDATE STUDENT
+// 47. ENROLLMENTS - Update Enrollment
 // =============================================
 app.put('/api/registrar/enrollments/:id', (req, res) => {
     const { id } = req.params;
@@ -2313,10 +2419,6 @@ app.delete('/api/registrar/enrollments/:id', (req, res) => {
 // =============================================
 // 48b. ENROLLMENTS - Get Eligibility for Next Grade
 // =============================================
-// ✅ UPDATED: Simplified promotion policy — ANY term < 75 = FAILED (Retain)
-// No conditional promotion. No core/non-core distinction.
-// =============================================
-
 const OLD_QUARTERS = ['1st Quarter', '2nd Quarter', '3rd Quarter', '4th Quarter'];
 const NEW_TERMS = ['Term 1', 'Term 2', 'Term 3'];
 
@@ -2330,7 +2432,6 @@ const TERM_SHORT_MAP = {
     'Term 3': 'T3'
 };
 
-// Detect OLD (Q1-Q4) vs NEW (Term 1-3) grading system
 const detectGradingSystem = (gradeList) => {
     if (!gradeList || gradeList.length === 0) {
         return { isOldSystem: false, terms: NEW_TERMS };
@@ -2343,14 +2444,12 @@ const detectGradingSystem = (gradeList) => {
         : { isOldSystem: false, terms: NEW_TERMS };
 };
 
-// Build subject averages + flag ANY failing term (<75) per subject
 const buildSubjectAverages = (gradeList) => {
     if (!gradeList || gradeList.length === 0) return [];
 
     const detection = detectGradingSystem(gradeList);
     const expectedTerms = detection.terms;
 
-    // Group by subject
     const bySubject = {};
     gradeList.forEach((g) => {
         const key = g.subject;
@@ -2368,7 +2467,6 @@ const buildSubjectAverages = (gradeList) => {
     });
 
     return Object.values(bySubject).map((subj) => {
-        // Only use expected terms for average (ignore missing = excluded)
         const presentValues = expectedTerms
             .map((t) => subj.termMap[t])
             .filter((v) => !isNaN(v) && v > 0);
@@ -2383,7 +2481,6 @@ const buildSubjectAverages = (gradeList) => {
                   )
                 : 0;
 
-        // ✅ NEW POLICY: flag ANY term below 75
         const failingTerms = [];
         expectedTerms.forEach((term) => {
             const val = subj.termMap[term];
@@ -2460,13 +2557,11 @@ app.get('/api/registrar/enrollment-eligibility/:studentId', (req, res) => {
             db.query(gradesQuery, [latestEnrollment.id], (err, grades) => {
                 if (err) return res.status(500).json({ error: err.message });
 
-                // ── Compute subject averages + failing term detection ──
                 const subjectAverages = buildSubjectAverages(grades);
                 const failingSubjects = subjectAverages.filter(
                     (s) => s.hasFailingTerm
                 );
 
-                // ── Overall average (across ALL grade entries — display only) ──
                 let average = 0;
                 if (grades.length > 0) {
                     const sum = grades.reduce(
@@ -2477,12 +2572,7 @@ app.get('/api/registrar/enrollment-eligibility/:studentId', (req, res) => {
                 }
 
                 const gradeLevels = [
-                    'Grade 1',
-                    'Grade 2',
-                    'Grade 3',
-                    'Grade 4',
-                    'Grade 5',
-                    'Grade 6'
+                    'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'
                 ];
                 const currentIdx = gradeLevels.indexOf(
                     latestEnrollment.grade_level
@@ -2494,10 +2584,8 @@ app.get('/api/registrar/enrollment-eligibility/:studentId', (req, res) => {
                 let suggestedAction = 'ENROLL';
                 let message = '';
 
-                // ── ✅ NEW POLICY FIRST: check individual terms ──
                 const hasAnyFailingTerm = failingSubjects.length > 0;
 
-                // Special statuses override
                 if (latestEnrollment.status === 'graduated') {
                     eligibility = 'GRADUATED';
                     nextGradeLevel = null;
@@ -2512,7 +2600,6 @@ app.get('/api/registrar/enrollment-eligibility/:studentId', (req, res) => {
                     suggestedAction = 'REVIEW';
                     message = `⚠️ Status: ${latestEnrollment.status}. Kinahanglan i-review sa admin.`;
                 } else if (latestEnrollment.status === 'enrolled') {
-                    // Still enrolled — check kung naay failing terms
                     if (hasAnyFailingTerm) {
                         eligibility = 'FAILED';
                         nextGradeLevel = latestEnrollment.grade_level;
@@ -2523,9 +2610,7 @@ app.get('/api/registrar/enrollment-eligibility/:studentId', (req, res) => {
                                     `${s.subject} (${s.failingTerms
                                         .map(
                                             (ft) =>
-                                                `${ft.short}: ${ft.value.toFixed(
-                                                    2
-                                                )}`
+                                                `${ft.short}: ${ft.value.toFixed(2)}`
                                         )
                                         .join(', ')})`
                             )
@@ -2538,7 +2623,6 @@ app.get('/api/registrar/enrollment-eligibility/:studentId', (req, res) => {
                         message = `ℹ️ Currently enrolled sa ${latestEnrollment.grade_level} (${latestEnrollment.school_year}).`;
                     }
                 } else if (hasAnyFailingTerm) {
-                    // ❌ FAILED — naay term below 75 bisan unsa ka subject
                     eligibility = 'FAILED';
                     nextGradeLevel = latestEnrollment.grade_level;
                     suggestedAction = 'RETAIN';
@@ -2555,13 +2639,11 @@ app.get('/api/registrar/enrollment-eligibility/:studentId', (req, res) => {
                         .join('; ');
                     message = `❌ FAILED — Subject(s) with term below 75: ${detail}. Kailangan i-RETAIN sa ${latestEnrollment.grade_level}.`;
                 } else if (isGrade6) {
-                    // ✅ No failing terms + Grade 6 = Graduate
                     eligibility = 'GRADUATED';
                     nextGradeLevel = null;
                     suggestedAction = 'GRADUATE';
                     message = `🎓 Grade 6 passed — Graduate na siya! (Ave: ${average})`;
                 } else {
-                    // ✅ PROMOTED — walay failing term, dili Grade 6
                     eligibility = 'PROMOTED';
                     nextGradeLevel = gradeLevels[currentIdx + 1] || null;
                     suggestedAction = 'ENROLL';
@@ -2712,11 +2794,6 @@ app.post('/api/admin/graduate-student/:studentId', (req, res) => {
 // =============================================
 // 48d. RE-ENROLLMENT - Student Apply (Promote OR Retain)
 // =============================================
-// ✅ UPDATED: Detects failing terms per subject (ANY term < 75 = FAILED)
-//   - FAILED  → next_grade_level = SAME grade (RETAIN)
-//   - PROMOTED → next_grade_level = NEXT grade
-// =============================================
-
 const OLD_QUARTERS_RE = ['1st Quarter', '2nd Quarter', '3rd Quarter', '4th Quarter'];
 const NEW_TERMS_RE = ['Term 1', 'Term 2', 'Term 3'];
 
@@ -2818,7 +2895,6 @@ app.post('/api/student/reenrollment/apply', (req, res) => {
                 return res.status(400).json({ error: 'Naa nay pending re-enrollment request. Please wait for approval.' });
             }
 
-            // ── Fetch ALL grades para ma-detect ang failing terms ──
             const gradesQuery = `
                 SELECT id, subject, grade, quarter, remarks
                 FROM grades
@@ -2829,7 +2905,6 @@ app.post('/api/student/reenrollment/apply', (req, res) => {
             db.query(gradesQuery, [current_enrollment_id], (err, allGrades) => {
                 if (err) return res.status(500).json({ error: err.message });
 
-                // Compute average (display only)
                 const average = allGrades.length > 0
                     ? parseFloat(
                           (allGrades.reduce((acc, g) => acc + parseFloat(g.grade || 0), 0) /
@@ -2837,7 +2912,6 @@ app.post('/api/student/reenrollment/apply', (req, res) => {
                       )
                     : null;
 
-                // ✅ Detect FAILED vs PROMOTED
                 const subjectAves = buildSubjectAveragesRE(allGrades);
                 const failingSubjects = subjectAves.filter((s) => s.hasFailingTerm);
                 const isRetained = failingSubjects.length > 0;
@@ -2845,29 +2919,24 @@ app.post('/api/student/reenrollment/apply', (req, res) => {
                 const gradeLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
                 const currentIdx = gradeLevels.indexOf(enrollment.grade_level);
 
-                // ✅ TARGET GRADE: RETAIN = SAME, PROMOTE = NEXT
                 let targetGrade;
                 if (isRetained) {
-                    targetGrade = enrollment.grade_level; // Grade 1 → Grade 1
+                    targetGrade = enrollment.grade_level;
                 } else {
                     targetGrade = gradeLevels[currentIdx + 1] || null;
                 }
 
-                // Kung Grade 6 + PROMOTED = graduate, dili na re-enroll
                 if (!targetGrade) {
                     return res.status(400).json({
                         error: 'Grade 6 na — graduate na, dili na pwede mag-re-enroll.'
                     });
                 }
 
-                // ── Next school year ──
-                // RETAIN: same SY? No — next SY gihapon (mag-retain sa Grade 1 for next school year)
                 const parts = enrollment.school_year.split('-');
                 const nextSY = parts.length === 2
                     ? `${parseInt(parts[0]) + 1}-${parseInt(parts[1]) + 1}`
                     : enrollment.school_year;
 
-                // ── Build remarks ──
                 let finalRemarks = remarks || null;
                 if (isRetained) {
                     const detail = failingSubjects
@@ -3392,13 +3461,16 @@ app.get('/api/admin/reports/failing-students', (req, res) => {
             s.last_name,
             s.current_grade_level,
             s.current_section,
+            e.school_year,
             AVG(g.grade) as average_grade,
-            COUNT(g.id) as total_subjects
+            MIN(g.grade) as lowest_grade,
+            COUNT(DISTINCT g.subject) as total_subjects
         FROM students s
-        JOIN grades g ON s.id = g.student_id
-        WHERE g.grade < 75
-        GROUP BY s.id
-        HAVING AVG(g.grade) < 75
+        JOIN student_enrollments e ON s.id = e.student_id
+        JOIN grades g ON e.id = g.enrollment_id
+        WHERE e.status IN ('enrolled', 'passed')
+        GROUP BY s.id, e.id
+        HAVING MIN(g.grade) < 75
         ORDER BY average_grade ASC
     `;
 
@@ -3409,7 +3481,7 @@ app.get('/api/admin/reports/failing-students', (req, res) => {
 });
 
 // =============================================
-// 61. REPORTS - Promotion Candidates
+// 61. REPORTS - Promotion List
 // =============================================
 app.get('/api/admin/reports/promotion-list', (req, res) => {
     const query = `
@@ -3424,16 +3496,17 @@ app.get('/api/admin/reports/promotion-list', (req, res) => {
             e.school_year,
             e.semester,
             AVG(g.grade) as average_grade,
+            MIN(g.grade) as lowest_grade,
             CASE 
-                WHEN AVG(g.grade) >= 75 THEN 'PASSED'
-                ELSE 'FAILED'
+                WHEN MIN(g.grade) < 75 THEN 'FAILED'
+                ELSE 'PASSED'
             END as promotion_status
         FROM students s
         JOIN student_enrollments e ON s.id = e.student_id
         LEFT JOIN grades g ON e.id = g.enrollment_id
-        WHERE e.status = 'enrolled'
+        WHERE e.status IN ('enrolled', 'passed')
         GROUP BY s.id, e.id
-        ORDER BY average_grade DESC
+        ORDER BY promotion_status ASC, average_grade DESC
     `;
 
     db.query(query, (err, results) => {

@@ -14,7 +14,7 @@ const StudentApplication = () => {
     address: '',
     contactNumber: '',
     email: '',
-    // NEW: Grade Level
+    // Grade Level
     gradeLevel: '',
     // Parent/Guardian
     fatherName: '',
@@ -40,7 +40,7 @@ const StudentApplication = () => {
 
   const handleChange = (e) => {
     const { name, value, type, files } = e.target;
-    
+
     if (type === 'file') {
       setFormData(prev => ({
         ...prev,
@@ -69,7 +69,7 @@ const StudentApplication = () => {
 
     try {
       const formDataToSend = new FormData();
-      
+
       Object.keys(formData).forEach(key => {
         if (formData[key] !== null && formData[key] !== undefined) {
           formDataToSend.append(key, formData[key]);
@@ -81,9 +81,9 @@ const StudentApplication = () => {
           'Content-Type': 'multipart/form-data'
         }
       });
-      
+
       setMessage({ type: 'success', text: '✅ ' + response.data.message });
-      
+
       // Reset form
       setFormData({
         firstName: '',
@@ -110,16 +110,16 @@ const StudentApplication = () => {
         idPicture: null,
         academicYear: '2026-2027'
       });
-      
+
       // Reset file inputs
       document.querySelectorAll('input[type="file"]').forEach(input => {
         input.value = '';
       });
 
     } catch (error) {
-      setMessage({ 
-        type: 'error', 
-        text: '❌ ' + (error.response?.data?.error || 'Something went wrong') 
+      setMessage({
+        type: 'error',
+        text: '❌ ' + (error.response?.data?.error || 'Something went wrong')
       });
     } finally {
       setLoading(false);
@@ -165,7 +165,7 @@ const StudentApplication = () => {
   return (
     <div style={{ minHeight: '100vh', background: '#f3f4f6', padding: '32px 16px' }}>
       <div style={{ maxWidth: '850px', margin: '0 auto', background: 'white', borderRadius: '12px', padding: '32px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-        
+
         {/* Back to Home */}
         <div style={{ marginBottom: '16px' }}>
           <Link to="/" style={{
@@ -213,21 +213,21 @@ const StudentApplication = () => {
             <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#374151', borderBottom: '2px solid #e5e7eb', paddingBottom: '8px', marginBottom: '16px' }}>
               👤 Personal Information
             </h2>
-            
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
-                <label style={labelStyle}>First Name *</label>
-                <input type="text" name="firstName" value={formData.firstName} onChange={handleChange} required style={inputStyle} placeholder="Enter first name" />
+                <label style={labelStyle}>First Name * <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 20)</small></label>
+                <input type="text" name="firstName" value={formData.firstName} onChange={handleChange} required maxLength={20} style={inputStyle} placeholder="Enter first name" />
               </div>
 
               <div>
-                <label style={labelStyle}>Middle Name</label>
-                <input type="text" name="middleName" value={formData.middleName} onChange={handleChange} style={inputStyle} placeholder="Enter middle name" />
+                <label style={labelStyle}>Middle Name <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 20)</small></label>
+                <input type="text" name="middleName" value={formData.middleName} onChange={handleChange} maxLength={20} style={inputStyle} placeholder="Enter middle name" />
               </div>
 
               <div>
-                <label style={labelStyle}>Last Name *</label>
-                <input type="text" name="lastName" value={formData.lastName} onChange={handleChange} required style={inputStyle} placeholder="Enter last name" />
+                <label style={labelStyle}>Last Name * <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 20)</small></label>
+                <input type="text" name="lastName" value={formData.lastName} onChange={handleChange} required maxLength={20} style={inputStyle} placeholder="Enter last name" />
               </div>
 
               <div>
@@ -261,7 +261,6 @@ const StudentApplication = () => {
                 </div>
               </div>
 
-              {/* NEW: Grade Level */}
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={labelStyle}>Grade Level Applying For *</label>
                 <select
@@ -282,18 +281,18 @@ const StudentApplication = () => {
               </div>
 
               <div>
-                <label style={labelStyle}>Contact Number *</label>
-                <input type="text" name="contactNumber" value={formData.contactNumber} onChange={handleChange} required style={inputStyle} placeholder="e.g., 09123456789" />
+                <label style={labelStyle}>Contact Number * <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 15)</small></label>
+                <input type="text" name="contactNumber" value={formData.contactNumber} onChange={handleChange} required maxLength={15} style={inputStyle} placeholder="e.g., 09123456789" />
               </div>
 
               <div style={{ gridColumn: '1 / -1' }}>
-                <label style={labelStyle}>Home Address *</label>
-                <textarea name="address" value={formData.address} onChange={handleChange} required rows="2" style={inputStyle} placeholder="Enter complete address" />
+                <label style={labelStyle}>Home Address * <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 50)</small></label>
+                <textarea name="address" value={formData.address} onChange={handleChange} required maxLength={50} rows="2" style={inputStyle} placeholder="Enter complete address" />
               </div>
 
               <div style={{ gridColumn: '1 / -1' }}>
-                <label style={labelStyle}>Email Address *</label>
-                <input type="email" name="email" value={formData.email} onChange={handleChange} required style={inputStyle} placeholder="parent@email.com" />
+                <label style={labelStyle}>Email Address * <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 30)</small></label>
+                <input type="email" name="email" value={formData.email} onChange={handleChange} required maxLength={30} style={inputStyle} placeholder="parent@email.com" />
                 <small style={{ color: '#6b7280', fontSize: '12px' }}>
                   Credentials will be sent to this email
                 </small>
@@ -306,46 +305,46 @@ const StudentApplication = () => {
             <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#374151', borderBottom: '2px solid #e5e7eb', paddingBottom: '8px', marginBottom: '16px' }}>
               👨‍👩‍👦 Parent/Guardian Information
             </h2>
-            
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
-                <label style={labelStyle}>Father's Name</label>
-                <input type="text" name="fatherName" value={formData.fatherName} onChange={handleChange} style={inputStyle} placeholder="Enter father's full name" />
+                <label style={labelStyle}>Father's Name <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 20)</small></label>
+                <input type="text" name="fatherName" value={formData.fatherName} onChange={handleChange} maxLength={20} style={inputStyle} placeholder="Enter father's full name" />
               </div>
 
               <div>
-                <label style={labelStyle}>Father's Occupation</label>
-                <input type="text" name="fatherOccupation" value={formData.fatherOccupation} onChange={handleChange} style={inputStyle} placeholder="Enter father's occupation" />
+                <label style={labelStyle}>Father's Occupation <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 30)</small></label>
+                <input type="text" name="fatherOccupation" value={formData.fatherOccupation} onChange={handleChange} maxLength={30} style={inputStyle} placeholder="Enter father's occupation" />
               </div>
 
               <div style={{ gridColumn: '1 / -1' }}>
-                <label style={labelStyle}>Father's Contact Number</label>
-                <input type="text" name="fatherContact" value={formData.fatherContact} onChange={handleChange} style={inputStyle} placeholder="Enter father's contact number" />
+                <label style={labelStyle}>Father's Contact Number <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 15)</small></label>
+                <input type="text" name="fatherContact" value={formData.fatherContact} onChange={handleChange} maxLength={15} style={inputStyle} placeholder="Enter father's contact number" />
               </div>
 
               <div>
-                <label style={labelStyle}>Mother's Name</label>
-                <input type="text" name="motherName" value={formData.motherName} onChange={handleChange} style={inputStyle} placeholder="Enter mother's full name" />
+                <label style={labelStyle}>Mother's Name <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 20)</small></label>
+                <input type="text" name="motherName" value={formData.motherName} onChange={handleChange} maxLength={20} style={inputStyle} placeholder="Enter mother's full name" />
               </div>
 
               <div>
-                <label style={labelStyle}>Mother's Occupation</label>
-                <input type="text" name="motherOccupation" value={formData.motherOccupation} onChange={handleChange} style={inputStyle} placeholder="Enter mother's occupation" />
+                <label style={labelStyle}>Mother's Occupation <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 30)</small></label>
+                <input type="text" name="motherOccupation" value={formData.motherOccupation} onChange={handleChange} maxLength={30} style={inputStyle} placeholder="Enter mother's occupation" />
               </div>
 
               <div style={{ gridColumn: '1 / -1' }}>
-                <label style={labelStyle}>Mother's Contact Number</label>
-                <input type="text" name="motherContact" value={formData.motherContact} onChange={handleChange} style={inputStyle} placeholder="Enter mother's contact number" />
+                <label style={labelStyle}>Mother's Contact Number <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 15)</small></label>
+                <input type="text" name="motherContact" value={formData.motherContact} onChange={handleChange} maxLength={15} style={inputStyle} placeholder="Enter mother's contact number" />
               </div>
 
               <div>
-                <label style={labelStyle}>Guardian's Name (if applicable)</label>
-                <input type="text" name="guardianName" value={formData.guardianName} onChange={handleChange} style={inputStyle} placeholder="Enter guardian's full name" />
+                <label style={labelStyle}>Guardian's Name (if applicable) <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 20)</small></label>
+                <input type="text" name="guardianName" value={formData.guardianName} onChange={handleChange} maxLength={20} style={inputStyle} placeholder="Enter guardian's full name" />
               </div>
 
               <div>
-                <label style={labelStyle}>Guardian's Contact</label>
-                <input type="text" name="guardianContact" value={formData.guardianContact} onChange={handleChange} style={inputStyle} placeholder="Enter guardian's contact" />
+                <label style={labelStyle}>Guardian's Contact <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 15)</small></label>
+                <input type="text" name="guardianContact" value={formData.guardianContact} onChange={handleChange} maxLength={15} style={inputStyle} placeholder="Enter guardian's contact" />
               </div>
             </div>
           </div>
@@ -358,7 +357,7 @@ const StudentApplication = () => {
             <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '12px' }}>
               Please upload the following requirements (PDF, JPG, or PNG format)
             </p>
-            
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
                 <label style={labelStyle}>Birth Certificate *</label>
@@ -387,8 +386,8 @@ const StudentApplication = () => {
           </div>
 
           <div style={{ textAlign: 'center', borderTop: '1px solid #e5e7eb', paddingTop: '24px' }}>
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               disabled={loading}
               style={{
                 background: loading ? '#93c5fd' : '#1a56db',

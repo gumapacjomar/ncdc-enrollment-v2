@@ -287,7 +287,6 @@ const RegistrarDashboard = () => {
     }
 
     try {
-      // ✅ WALK-IN endpoint (auto-approve)
       const response = await API.post('/registrar/apply-walkin', {
         ...formData,
         registrarId: user.id
@@ -1101,16 +1100,16 @@ const RegistrarDashboard = () => {
                 </div>
 
                 <div>
-                  <label style={labelStyle}>First Name *</label>
-                  <input type="text" name="first_name" value={editData.first_name || ''} onChange={handleEditChange} style={inputStyle} />
+                  <label style={labelStyle}>First Name * <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 20)</small></label>
+                  <input type="text" name="first_name" value={editData.first_name || ''} onChange={handleEditChange} maxLength={20} style={inputStyle} />
                 </div>
                 <div>
-                  <label style={labelStyle}>Middle Name</label>
-                  <input type="text" name="middle_name" value={editData.middle_name || ''} onChange={handleEditChange} style={inputStyle} />
+                  <label style={labelStyle}>Middle Name <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 20)</small></label>
+                  <input type="text" name="middle_name" value={editData.middle_name || ''} onChange={handleEditChange} maxLength={20} style={inputStyle} />
                 </div>
                 <div>
-                  <label style={labelStyle}>Last Name *</label>
-                  <input type="text" name="last_name" value={editData.last_name || ''} onChange={handleEditChange} style={inputStyle} />
+                  <label style={labelStyle}>Last Name * <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 20)</small></label>
+                  <input type="text" name="last_name" value={editData.last_name || ''} onChange={handleEditChange} maxLength={20} style={inputStyle} />
                 </div>
                 <div>
                   <label style={labelStyle}>Suffix</label>
@@ -1134,16 +1133,16 @@ const RegistrarDashboard = () => {
                   </select>
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={labelStyle}>Address</label>
-                  <input type="text" name="address" value={editData.address || ''} onChange={handleEditChange} style={inputStyle} />
+                  <label style={labelStyle}>Address <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 50)</small></label>
+                  <input type="text" name="address" value={editData.address || ''} onChange={handleEditChange} maxLength={50} style={inputStyle} />
                 </div>
                 <div>
-                  <label style={labelStyle}>Contact Number</label>
-                  <input type="text" name="contact_number" value={editData.contact_number || ''} onChange={handleEditChange} style={inputStyle} />
+                  <label style={labelStyle}>Contact Number <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 15)</small></label>
+                  <input type="text" name="contact_number" value={editData.contact_number || ''} onChange={handleEditChange} maxLength={15} style={inputStyle} />
                 </div>
                 <div>
-                  <label style={labelStyle}>Email *</label>
-                  <input type="email" name="email" value={editData.email || ''} onChange={handleEditChange} style={inputStyle} />
+                  <label style={labelStyle}>Email * <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 30)</small></label>
+                  <input type="email" name="email" value={editData.email || ''} onChange={handleEditChange} maxLength={30} style={inputStyle} />
                 </div>
 
                 <div style={{ gridColumn: '1 / -1', marginTop: '8px' }}>
@@ -1228,16 +1227,16 @@ const RegistrarDashboard = () => {
                 </h3>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                   <div>
-                    <label style={labelStyle}>First Name *</label>
-                    <input type="text" name="firstName" value={formData.firstName} onChange={handleAddChange} required style={inputStyle} />
+                    <label style={labelStyle}>First Name * <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 20)</small></label>
+                    <input type="text" name="firstName" value={formData.firstName} onChange={handleAddChange} required maxLength={20} style={inputStyle} />
                   </div>
                   <div>
-                    <label style={labelStyle}>Middle Name</label>
-                    <input type="text" name="middleName" value={formData.middleName} onChange={handleAddChange} style={inputStyle} />
+                    <label style={labelStyle}>Middle Name <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 20)</small></label>
+                    <input type="text" name="middleName" value={formData.middleName} onChange={handleAddChange} maxLength={20} style={inputStyle} />
                   </div>
                   <div>
-                    <label style={labelStyle}>Last Name *</label>
-                    <input type="text" name="lastName" value={formData.lastName} onChange={handleAddChange} required style={inputStyle} />
+                    <label style={labelStyle}>Last Name * <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 20)</small></label>
+                    <input type="text" name="lastName" value={formData.lastName} onChange={handleAddChange} required maxLength={20} style={inputStyle} />
                   </div>
                   <div>
                     <label style={labelStyle}>Suffix</label>
@@ -1261,16 +1260,16 @@ const RegistrarDashboard = () => {
                     </select>
                   </div>
                   <div>
-                    <label style={labelStyle}>Contact Number</label>
-                    <input type="text" name="contactNumber" value={formData.contactNumber} onChange={handleAddChange} style={inputStyle} />
+                    <label style={labelStyle}>Contact Number <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 15)</small></label>
+                    <input type="text" name="contactNumber" value={formData.contactNumber} onChange={handleAddChange} maxLength={15} style={inputStyle} />
                   </div>
                   <div style={{ gridColumn: '1 / -1' }}>
-                    <label style={labelStyle}>Address *</label>
-                    <textarea name="address" value={formData.address} onChange={handleAddChange} required rows="2" style={inputStyle} />
+                    <label style={labelStyle}>Address * <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 50)</small></label>
+                    <textarea name="address" value={formData.address} onChange={handleAddChange} required maxLength={50} rows="2" style={inputStyle} />
                   </div>
                   <div style={{ gridColumn: '1 / -1' }}>
-                    <label style={labelStyle}>Email Address *</label>
-                    <input type="email" name="email" value={formData.email} onChange={handleAddChange} required style={inputStyle} />
+                    <label style={labelStyle}>Email Address * <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 30)</small></label>
+                    <input type="email" name="email" value={formData.email} onChange={handleAddChange} required maxLength={30} style={inputStyle} />
                   </div>
 
                   <div style={{ gridColumn: '1 / -1' }}>
