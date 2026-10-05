@@ -141,12 +141,11 @@ console.log('📧 Email service: Disabled');
 // =============================================
 
 // =============================================
-// ✅ ATOMIC ID GENERATOR (Race-condition safe)
+// ATOMIC ID GENERATOR (Race-condition safe)
 // Uses MySQL's LAST_INSERT_ID for atomic increment
 // =============================================
 const generateStudentId = () => {
     return new Promise((resolve, reject) => {
-        // ✅ Atomic increment: UPDATE + LAST_INSERT_ID in one query
         const updateQuery = `
             UPDATE counters
             SET value = LAST_INSERT_ID(value + 1)
@@ -160,7 +159,6 @@ const generateStudentId = () => {
                 return reject(new Error('student_id counter not initialized. Please run the counters table setup.'));
             }
 
-            // ✅ Get the atomic incremented value (connection-scoped)
             db.query('SELECT LAST_INSERT_ID() as new_id', (err, rows) => {
                 if (err) return reject(err);
 
@@ -877,7 +875,6 @@ app.post('/api/admin/confirm/:id', async (req, res) => {
             const student = results[0];
             console.log('✅ Student:', student.first_name, student.last_name);
 
-            // ✅ Atomic ID generation — guaranteed unique, no race condition
             let studentId;
             try {
                 studentId = await generateStudentId();
@@ -3616,6 +3613,33 @@ app.get('/api/admin/reports/summary', (req, res) => {
         res.json(results[0]);
     });
 });
+
+// =============================================
+// ✅ FRONTEND STATIC SERVING (Express 5 compatible)
+// =============================================
+const clientBuildPath = path.join(__dirname, '..', 'client', 'dist');
+
+if (fs.existsSync(clientBuildPath)) {
+    app.use(express.static(clientBuildPath));
+
+    // Express 5 compatible SPA fallback — gamit app.use, dili app.get('*')
+    app.use((req, res, next) => {
+        // Skip API and uploads routes — let them 404 naturally
+        if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+            return next();
+        }
+        // Only handle GET requests for SPA routes
+        if (req.method !== 'GET') {
+            return next();
+        }
+        res.sendFile(path.join(clientBuildPath, 'index.html'));
+    });
+
+    console.log(`📁 Serving frontend from: ${clientBuildPath}`);
+} else {
+    console.log(`⚠️  Frontend build not found at: ${clientBuildPath}`);
+    console.log(`   Run "npm run build" in the client folder first.`);
+}
 
 // =============================================
 // START SERVER
