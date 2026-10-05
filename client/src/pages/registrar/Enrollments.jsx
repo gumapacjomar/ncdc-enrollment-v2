@@ -192,7 +192,6 @@ const Enrollments = () => {
             return;
         }
 
-        // ✅ NEW: Simplified warning — FAILED status
         if (eligibility?.eligibility === 'FAILED') {
             const shouldProceed = window.confirm(
                 `⚠️ WARNING: May bagsak ang student!\n\n` +
@@ -256,7 +255,24 @@ const Enrollments = () => {
         ? sections.filter(s => s.grade_level === formData.grade_level && s.status === 'active')
         : sections.filter(s => s.status === 'active');
 
-    const filtered = enrollments.filter(e => {
+    // ✅ FIX: Dedupe enrollments — 1 row per student per SY
+    // Keeps the LATEST enrollment (highest id) kung naay duplicates
+    const dedupedEnrollments = (() => {
+        const map = new Map();
+        enrollments.forEach(e => {
+            // ✅ Unique key: student_id + school_year (para 1 enrollment per SY)
+            const key = `${e.student_id}|${e.school_year}`;
+            const existing = map.get(key);
+            
+            // Keep the one with higher id (latest created)
+            if (!existing || (e.id && existing.id && e.id > existing.id)) {
+                map.set(key, e);
+            }
+        });
+        return Array.from(map.values());
+    })();
+
+    const filtered = dedupedEnrollments.filter(e => {
         const matchesGrade = !filterGrade || e.grade_level === filterGrade;
         const matchesStatus = filterStatus === 'all' || e.status === filterStatus;
         return matchesGrade && matchesStatus;
@@ -310,7 +326,6 @@ const Enrollments = () => {
         return colors[status] || colors.enrolled;
     };
 
-    // ✅ UPDATED: Simplified eligibility styles
     const eligibilityStyle = (type) => {
         const colors = {
             ELIGIBLE: { bg: '#d1fae5', color: '#065f46', border: '#34d399', icon: '✅', label: 'Eligible for Next Grade' },
@@ -319,7 +334,9 @@ const Enrollments = () => {
             GRADUATED: { bg: '#e0e7ff', color: '#4338ca', border: '#818cf8', icon: '🎓', label: 'Graduated' },
             NOT_ELIGIBLE: { bg: '#fee2e2', color: '#991b1b', border: '#fca5a5', icon: '❌', label: 'Not Eligible' },
             NEW_STUDENT: { bg: '#f3f4f6', color: '#6b7280', border: '#d1d5db', icon: '🆕', label: 'New Student' },
-            PENDING: { bg: '#f3f4f6', color: '#6b7280', border: '#d1d5db', icon: '⏳', label: 'Pending Review' }
+            PENDING: { bg: '#f3f4f6', color: '#6b7280', border: '#d1d5db', icon: '⏳', label: 'Pending Review' },
+            PROMOTED: { bg: '#d1fae5', color: '#065f46', border: '#34d399', icon: '✅', label: 'Promoted' },
+            RETAINED: { bg: '#fee2e2', color: '#991b1b', border: '#fca5a5', icon: '🔁', label: 'Retained' }
         };
         return colors[type] || colors.PENDING;
     };

@@ -153,25 +153,28 @@ const StudentHistory = () => {
             return { isOldSystem: false, columns: ['Term 1', 'Term 2', 'Term 3'], displayHeaders: ['Term 1', 'Term 2', 'Term 3'] };
         }
 
-        const hasOldQuarters = gradesForEnrollment.some(g => 
+        const hasOldQuarters = gradesForEnrollment.some(g =>
             g.quarter && g.quarter.toLowerCase().includes('quarter')
         );
 
         if (hasOldQuarters) {
-            return { 
-                isOldSystem: true, 
+            return {
+                isOldSystem: true,
                 columns: ['1st Quarter', '2nd Quarter', '3rd Quarter', '4th Quarter'],
                 displayHeaders: ['Q1', 'Q2', 'Q3', 'Q4']
             };
         }
 
-        return { 
-            isOldSystem: false, 
+        return {
+            isOldSystem: false,
             columns: ['Term 1', 'Term 2', 'Term 3'],
             displayHeaders: ['Term 1', 'Term 2', 'Term 3']
         };
     };
 
+    // =============================================
+    // ✅ FIXED: buildRoadmap — handles duplicate enrollments
+    // =============================================
     const buildRoadmap = () => {
         if (!history) return [];
 
@@ -179,17 +182,46 @@ const StudentHistory = () => {
         const grades = history.grades || [];
 
         return gradeLevels.map(gradeLevel => {
-            const enrollment = enrollments.find(e => e.grade_level === gradeLevel);
+            // ✅ Get ALL enrollments for this grade level (handle duplicates)
+            const enrollmentsForGrade = enrollments
+                .filter(e => e.grade_level === gradeLevel)
+                .sort((a, b) => {
+                    // Sort by school_year descending — latest first
+                    if (a.school_year > b.school_year) return -1;
+                    if (a.school_year < b.school_year) return 1;
+                    return 0;
+                });
+
+            // ✅ Pick the PRIMARY enrollment:
+            // Priority: 1) enrolled status (current) → 2) latest passed → 3) latest by SY
+            let enrollment = null;
+            if (enrollmentsForGrade.length > 0) {
+                // Try to find "enrolled" status first
+                const enrolledOne = enrollmentsForGrade.find(e => e.status === 'enrolled');
+                if (enrolledOne) {
+                    enrollment = enrolledOne;
+                } else {
+                    // Otherwise, latest (highest school_year)
+                    enrollment = enrollmentsForGrade[0];
+                }
+            }
+
             const subjectsForGrade = allSubjects.filter(s => s.grade_level === gradeLevel);
-            const gradesForEnrollment = enrollment
-                ? grades.filter(g => g.enrollment_id === enrollment.id)
-                : [];
+
+            // ✅ Get grades from ALL enrollments for this grade level
+            // (para kung naay duplicate, ma-combine ang grades from both)
+            const allEnrollmentIds = enrollmentsForGrade.map(e => e.id);
+            const gradesForEnrollment = grades.filter(g =>
+                allEnrollmentIds.includes(g.enrollment_id)
+            );
 
             const detection = detectSystem(gradesForEnrollment);
 
             const subjects = subjectsForGrade.map(subject => {
                 const cellValues = detection.columns.map(col =>
-                    gradesForEnrollment.find(g => g.subject === subject.subject_name && g.quarter === col)
+                    gradesForEnrollment.find(g =>
+                        g.subject === subject.subject_name && g.quarter === col
+                    )
                 );
 
                 const grades_list = cellValues.filter(Boolean).map(g => parseFloat(g.grade));
@@ -227,14 +259,25 @@ const StudentHistory = () => {
 
             const hasFailedSubjects = subjects.some(s => s.isFailed);
 
-            // ✅ NEW: Compute honor for this grade level
-            const honor = computeHonorFromSubjects(
-                subjects.map(s => ({ subject: s.subject_name, finalAve: s.finalAve }))
-            );
+            // ✅ FIX: Compute honor ONLY if naay at least 1 finalAve
+            const subjectsWithGrades = subjects.filter(s => s.finalAve !== null);
+            const hasAnyGrades = subjectsWithGrades.length > 0;
+
+            let honor = { isHonor: false, tier: null };
+            if (hasAnyGrades) {
+                const computedHonor = computeHonorFromSubjects(
+                    subjectsWithGrades.map(s => ({ subject: s.subject_name, finalAve: s.finalAve }))
+                );
+                // ✅ Only mark as honor kung naay minimum 1 valid subject with grade
+                if (computedHonor.isHonor && subjectsWithGrades.length > 0) {
+                    honor = computedHonor;
+                }
+            }
 
             return {
                 grade_level: gradeLevel,
                 enrollment,
+                enrollmentsForGrade, // ✅ Include all enrollments for reference
                 subjects,
                 status,
                 school_year: enrollment?.school_year || null,
@@ -243,7 +286,8 @@ const StudentHistory = () => {
                 isOldSystem: detection.isOldSystem,
                 displayHeaders: detection.displayHeaders,
                 columnsCount: detection.columns.length,
-                honor // ✅ NEW
+                honor, // ✅ NEW: only has isHonor=true kung naay grades
+                hasAnyGrades // ✅ NEW: flag para sa debug/display
             };
         });
     };
@@ -270,7 +314,7 @@ const StudentHistory = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 {roadmap.map((grade) => {
                     let bgColor, borderColor, headerBg, headerText, badgeColor;
-                    
+
                     if (grade.status === 'current') {
                         bgColor = '#dbeafe';
                         borderColor = '#3b82f6';
@@ -298,7 +342,8 @@ const StudentHistory = () => {
                     }
 
                     const overallAve = calculateOverallAverage(grade.subjects);
-                    const isHonor = grade.honor && grade.honor.isHonor;
+                    // ✅ FIX: isHonor only true if hasAnyGrades and honor.isHonor
+                    const isHonor = grade.hasAnyGrades && grade.honor && grade.honor.isHonor;
 
                     return (
                         <div key={grade.grade_level} style={{
@@ -306,8 +351,8 @@ const StudentHistory = () => {
                             borderRadius: '16px',
                             border: `2px solid ${isHonor ? grade.honor.tier.border : borderColor}`,
                             overflow: 'hidden',
-                            boxShadow: isHonor 
-                                ? `0 4px 20px ${grade.honor.tier.border}40` 
+                            boxShadow: isHonor
+                                ? `0 4px 20px ${grade.honor.tier.border}40`
                                 : '0 2px 8px rgba(0,0,0,0.04)'
                         }}>
                             <div style={{
@@ -350,7 +395,7 @@ const StudentHistory = () => {
                                             {grade.isOldSystem ? '📗 4Q' : '📘 3T'}
                                         </span>
                                     )}
-                                    {/* ✅ NEW: Honor Badge */}
+                                    {/* ✅ FIX: Honor Badge — only if hasAnyGrades */}
                                     {isHonor && (
                                         <span style={{
                                             fontSize: '12px',
@@ -441,8 +486,8 @@ const StudentHistory = () => {
                                                 return (
                                                     <tr key={sidx} style={{
                                                         borderTop: '1px solid rgba(0,0,0,0.05)',
-                                                        background: subject.isFailed 
-                                                            ? 'rgba(254, 226, 226, 0.7)' 
+                                                        background: subject.isFailed
+                                                            ? 'rgba(254, 226, 226, 0.7)'
                                                             : (sidx % 2 === 0 ? 'rgba(255,255,255,0.4)' : 'transparent')
                                                     }}>
                                                         <td style={{

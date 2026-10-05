@@ -3,6 +3,33 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import API from '../../services/api';
 import UPLOADS_URL from '../../services/uploads';
 
+// =============================================
+// ✅ HYBRID: Generate SY list (auto + existing DB)
+// Auto-generates from current year to +5 years ahead
+// Merges with existing SYs from database for historical data
+// =============================================
+const generateSchoolYears = (existingSYs = [], yearsAhead = 5) => {
+    const currentYear = new Date().getFullYear();
+    const sySet = new Set();
+
+    // ✅ Auto-generate: current year to +yearsAhead
+    for (let i = 0; i <= yearsAhead; i++) {
+        const startYear = currentYear + i;
+        const endYear = startYear + 1;
+        sySet.add(`${startYear}-${endYear}`);
+    }
+
+    // ✅ Merge existing SY from DB (historical data)
+    existingSYs.forEach(sy => {
+        if (sy && typeof sy === 'string') {
+            sySet.add(sy);
+        }
+    });
+
+    // ✅ Sort descending (latest first)
+    return Array.from(sySet).sort((a, b) => b.localeCompare(a));
+};
+
 const GradeReports = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -56,15 +83,17 @@ const GradeReports = () => {
             setFailingStudents(failing);
             setPromotionList(promotion);
 
-            // Collect unique SYs (from both lists)
-            const sySet = new Set();
+            // ✅ Collect existing SYs from DB
+            const existingSYs = new Set();
             [...failing, ...promotion].forEach(s => {
-                if (s.school_year) sySet.add(s.school_year);
+                if (s.school_year) existingSYs.add(s.school_year);
             });
-            const syList = Array.from(sySet).sort((a, b) => b.localeCompare(a));
+
+            // ✅ HYBRID: Generate SY list (auto 5 years ahead + existing DB)
+            const syList = generateSchoolYears(Array.from(existingSYs), 5);
             setAvailableSYs(syList);
 
-            // Default: latest SY
+            // ✅ Default: latest SY (pinaka-bag-o, from current year)
             if (syList.length > 0 && !filterSY) {
                 setFilterSY(syList[0]);
             }
@@ -561,7 +590,7 @@ const GradeReports = () => {
                         />
                     </div>
 
-                    {/* ✅ SY Filter */}
+                    {/* ✅ SY Filter — Hybrid (auto + existing DB) */}
                     {availableSYs.length > 0 && (
                         <div>
                             <label style={{ marginRight: '8px', fontSize: '13px', color: '#6b7280', fontWeight: '600' }}>
