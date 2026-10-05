@@ -4,5 +4,4 @@ ncdc-enrollment-v2/
 node_modules/
 .env
 uploads/
-dist/
 build/
