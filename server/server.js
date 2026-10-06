@@ -3615,30 +3615,44 @@ app.get('/api/admin/reports/summary', (req, res) => {
 });
 
 // =============================================
-// ✅ FRONTEND STATIC SERVING (Express 5 compatible)
+// FRONTEND STATIC SERVING (Express 5 compatible)
+// Robust path detection for various deploy environments
 // =============================================
-const clientBuildPath = path.join(__dirname, '..', 'client', 'dist');
+const clientBuildPath = (() => {
+    const candidates = [
+        path.join(__dirname, '..', 'client', 'dist'),
+        path.join(__dirname, 'client', 'dist'),
+        path.join(process.cwd(), 'client', 'dist'),
+        path.join(process.cwd(), '..', 'client', 'dist'),
+        path.join(__dirname, '..', '..', 'client', 'dist'),
+        path.join(__dirname, '..', '..', '..', 'client', 'dist')
+    ];
+    for (const p of candidates) {
+        if (fs.existsSync(p) && fs.existsSync(path.join(p, 'index.html'))) {
+            console.log(`Found frontend build at: ${p}`);
+            return p;
+        }
+    }
+    return null;
+})();
 
-if (fs.existsSync(clientBuildPath)) {
+if (clientBuildPath) {
     app.use(express.static(clientBuildPath));
 
-    // Express 5 compatible SPA fallback — gamit app.use, dili app.get('*')
     app.use((req, res, next) => {
-        // Skip API and uploads routes — let them 404 naturally
         if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
             return next();
         }
-        // Only handle GET requests for SPA routes
         if (req.method !== 'GET') {
             return next();
         }
         res.sendFile(path.join(clientBuildPath, 'index.html'));
     });
 
-    console.log(`📁 Serving frontend from: ${clientBuildPath}`);
+    console.log(`Serving frontend from: ${clientBuildPath}`);
 } else {
-    console.log(`⚠️  Frontend build not found at: ${clientBuildPath}`);
-    console.log(`   Run "npm run build" in the client folder first.`);
+    console.log(`Frontend build not found. Searched from __dirname: ${__dirname}`);
+    console.log(`Run "npm run build" in the client folder first.`);
 }
 
 // =============================================
