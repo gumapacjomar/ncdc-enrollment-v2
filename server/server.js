@@ -3620,12 +3620,12 @@ app.get('/api/admin/reports/summary', (req, res) => {
 // =============================================
 const clientBuildPath = (() => {
     const candidates = [
-        path.join(__dirname, '..', 'client', 'dist'),
+        path.join(__dirname, 'dist'),                     // server/dist (Hostinger: root = server)
+        path.join(__dirname, '..', 'client', 'dist'),     // dev: server/../client/dist
         path.join(__dirname, 'client', 'dist'),
         path.join(process.cwd(), 'client', 'dist'),
         path.join(process.cwd(), '..', 'client', 'dist'),
-        path.join(__dirname, '..', '..', 'client', 'dist'),
-        path.join(__dirname, '..', '..', '..', 'client', 'dist')
+        path.join(__dirname, '..', '..', 'client', 'dist')
     ];
     for (const p of candidates) {
         if (fs.existsSync(p) && fs.existsSync(path.join(p, 'index.html'))) {
