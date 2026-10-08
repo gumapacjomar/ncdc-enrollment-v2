@@ -20,6 +20,8 @@ const StudentHistory = () => {
     const user = JSON.parse(localStorage.getItem('user'));
     const currentPath = location.pathname;
 
+    const gradeLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
+
     useEffect(() => {
         if (!user || (user.role !== 'admin' && user.role !== 'registrar')) {
             navigate('/login');
@@ -170,8 +172,8 @@ const StudentHistory = () => {
     };
 
     // =============================================
-    // ✅ FIXED: buildRoadmap — per enrollment, dili per grade level
-    // Kada enrollment (school year) kay separate record — labi na retained
+    // ✅ FIXED: buildRoadmap — PER ENROLLMENT (dili per grade level)
+    // Kada school year kay separate record — labi na retained
     // =============================================
     const buildRoadmap = () => {
         if (!history) return [];
@@ -179,9 +181,11 @@ const StudentHistory = () => {
         const enrollments = history.enrollments || [];
         const grades = history.grades || [];
 
-        // ✅ Sort enrollments chronologically (oldest first)
+        // ✅ Sort enrollments chronologically by school year (oldest first)
         const sortedEnrollments = [...enrollments].sort((a, b) => {
-            if (a.school_year !== b.school_year) return a.school_year.localeCompare(b.school_year);
+            if (a.school_year !== b.school_year) {
+                return a.school_year.localeCompare(b.school_year);
+            }
             return a.id - b.id;
         });
 
@@ -189,7 +193,7 @@ const StudentHistory = () => {
         return sortedEnrollments.map((enrollment, idx) => {
             const gradeLevel = enrollment.grade_level;
 
-            // Get grades for THIS specific enrollment only
+            // ✅ Get grades ONLY for THIS enrollment
             const gradesForEnrollment = grades.filter(g =>
                 g.enrollment_id === enrollment.id
             );
@@ -220,7 +224,7 @@ const StudentHistory = () => {
                     }
                 });
 
-                // ✅ Check kung naay term < 75 (DepEd promotion rule)
+                // ✅ Check kung naay term below 75 (DepEd promotion rule)
                 const hasFailingTerm = cellValues.some(c => c && parseFloat(c.grade) < 75);
 
                 return {
@@ -234,7 +238,7 @@ const StudentHistory = () => {
             });
 
             // ✅ Status determination
-            let status = 'future';
+            let status = 'unknown';
             if (enrollment.status === 'enrolled') status = 'current';
             else if (enrollment.status === 'passed') status = 'completed';
             else if (enrollment.status === 'graduated') status = 'graduated';
@@ -245,7 +249,7 @@ const StudentHistory = () => {
 
             const hasFailedSubjects = subjects.some(s => s.isFailed);
 
-            // ✅ Honor computation
+            // ✅ Honor computation (only if walay failing term)
             const subjectsWithGrades = subjects.filter(s => s.finalAve !== null);
             const hasAnyGrades = subjectsWithGrades.length > 0;
 
@@ -259,7 +263,7 @@ const StudentHistory = () => {
                 }
             }
 
-            // ✅ Detect if this is a RETAIN (same grade as previous enrollment)
+            // ✅ Detect retain (same grade level as previous enrollment)
             const previousEnrollment = idx > 0 ? sortedEnrollments[idx - 1] : null;
             const isRetained = previousEnrollment && previousEnrollment.grade_level === gradeLevel;
 
@@ -323,13 +327,13 @@ const StudentHistory = () => {
                         borderColor = '#3b82f6';
                         headerBg = 'linear-gradient(135deg, #1a56db, #3b82f6)';
                         headerText = 'white';
-                        badgeColor = { bg: '#1a56db', color: 'white', label: 'Current' };
+                        badgeColor = { bg: '#1a56db', color: 'white', label: 'CURRENT' };
                     } else if (grade.status === 'completed') {
                         bgColor = '#dcfce7';
                         borderColor = '#10b981';
                         headerBg = 'linear-gradient(135deg, #059669, #10b981)';
                         headerText = 'white';
-                        badgeColor = { bg: '#10b981', color: 'white', label: '✅ Completed' };
+                        badgeColor = { bg: '#10b981', color: 'white', label: '✅ PASSED' };
                     } else if (grade.status === 'failed') {
                         bgColor = '#fee2e2';
                         borderColor = '#ef4444';
@@ -341,7 +345,7 @@ const StudentHistory = () => {
                         borderColor = '#8b5cf6';
                         headerBg = 'linear-gradient(135deg, #7c3aed, #8b5cf6)';
                         headerText = 'white';
-                        badgeColor = { bg: '#7c3aed', color: 'white', label: '🎓 Graduated' };
+                        badgeColor = { bg: '#7c3aed', color: 'white', label: '🎓 GRADUATED' };
                     } else if (grade.status === 'dropped' || grade.status === 'transferred') {
                         bgColor = '#fef3c7';
                         borderColor = '#f59e0b';
@@ -353,24 +357,27 @@ const StudentHistory = () => {
                         borderColor = '#e5e7eb';
                         headerBg = '#f3f4f6';
                         headerText = '#6b7280';
-                        badgeColor = { bg: '#e5e7eb', color: '#6b7280', label: 'Unknown' };
+                        badgeColor = { bg: '#e5e7eb', color: '#6b7280', label: 'UNKNOWN' };
                     }
 
                     const overallAve = calculateOverallAverage(grade.subjects);
                     const isHonor = grade.hasAnyGrades && grade.honor && grade.honor.isHonor;
 
                     return (
-                        <div key={`${grade.grade_level}-${grade.school_year}-${idx}`} style={{
-                            background: 'white',
-                            borderRadius: '16px',
-                            border: `2px solid ${isHonor ? grade.honor.tier.border : borderColor}`,
-                            overflow: 'hidden',
-                            boxShadow: isHonor
-                                ? `0 4px 20px ${grade.honor.tier.border}40`
-                                : '0 2px 8px rgba(0,0,0,0.04)',
-                            position: 'relative'
-                        }}>
-                            {/* ✅ Retain indicator — separate entry para sa same grade */}
+                        <div
+                            key={`${grade.grade_level}-${grade.school_year}-${idx}`}
+                            style={{
+                                background: 'white',
+                                borderRadius: '16px',
+                                border: `2px solid ${isHonor ? grade.honor.tier.border : borderColor}`,
+                                overflow: 'hidden',
+                                boxShadow: isHonor
+                                    ? `0 4px 20px ${grade.honor.tier.border}40`
+                                    : '0 2px 8px rgba(0,0,0,0.04)',
+                                position: 'relative'
+                            }}
+                        >
+                            {/* ✅ RETAINED badge */}
                             {grade.isRetained && (
                                 <div style={{
                                     position: 'absolute',
@@ -378,12 +385,13 @@ const StudentHistory = () => {
                                     right: '12px',
                                     background: '#fbbf24',
                                     color: '#78350f',
-                                    padding: '4px 12px',
+                                    padding: '5px 14px',
                                     borderRadius: '12px',
                                     fontSize: '11px',
                                     fontWeight: '800',
                                     zIndex: 10,
-                                    boxShadow: '0 2px 8px rgba(251,191,36,0.4)'
+                                    boxShadow: '0 2px 8px rgba(251,191,36,0.4)',
+                                    letterSpacing: '0.5px'
                                 }}>
                                     🔁 RETAINED
                                 </div>
@@ -470,7 +478,8 @@ const StudentHistory = () => {
                                         fontSize: '11px', fontWeight: '700',
                                         background: badgeColor.bg, color: badgeColor.color,
                                         padding: '4px 12px', borderRadius: '12px',
-                                        textTransform: 'uppercase'
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
                                     }}>{badgeColor.label}</span>
                                 </div>
                             </div>
@@ -838,7 +847,7 @@ const StudentHistory = () => {
                         }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <span style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#dcfce7', border: '2px solid #10b981' }}></span>
-                                <span style={{ color: '#065f46' }}>Completed</span>
+                                <span style={{ color: '#065f46' }}>Passed / Completed</span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <span style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#dbeafe', border: '2px solid #3b82f6' }}></span>
@@ -849,7 +858,7 @@ const StudentHistory = () => {
                                 <span style={{ color: '#991b1b' }}>Failed</span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#fef3c7', border: '2px solid #f59e0b' }}></span>
+                                <span style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#fbbf24', border: '2px solid #f59e0b' }}></span>
                                 <span style={{ color: '#92400e' }}>🔁 Retained</span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
