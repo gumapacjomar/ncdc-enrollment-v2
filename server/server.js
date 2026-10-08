@@ -2257,6 +2257,7 @@ app.get('/api/registrar/enrollments/student/:studentId', (req, res) => {
 
 // =============================================
 // 46. ENROLLMENTS - Create New Enrollment
+// ✅ Auto-marks previous enrollment as 'passed' if promotion
 // =============================================
 app.post('/api/registrar/enrollments', (req, res) => {
     const { student_id, grade_level, section_id, school_year, semester, remarks } = req.body;
@@ -2267,6 +2268,7 @@ app.post('/api/registrar/enrollments', (req, res) => {
 
     const finalSemester = semester || 'Full Year';
 
+    // Check if student already enrolled for this school year
     const checkQuery = `
         SELECT id FROM student_enrollments 
         WHERE student_id = ? AND school_year = ?
@@ -2278,47 +2280,90 @@ app.post('/api/registrar/enrollments', (req, res) => {
             return res.status(400).json({ error: 'Student already enrolled for this school year' });
         }
 
-        const insertQuery = `
-            INSERT INTO student_enrollments 
-            (student_id, grade_level, section_id, school_year, semester, status, remarks)
-            VALUES (?, ?, ?, ?, ?, 'enrolled', ?)
+        // ✅ STEP 1: Find previous active enrollment (para ma-mark as 'passed')
+        const prevQuery = `
+            SELECT id, grade_level, school_year, status 
+            FROM student_enrollments 
+            WHERE student_id = ? AND status = 'enrolled'
+            ORDER BY id DESC
+            LIMIT 1
         `;
-
-        db.query(insertQuery, [
-            student_id, grade_level, section_id || null, 
-            school_year, finalSemester, remarks || null
-        ], (err, result) => {
+        db.query(prevQuery, [student_id], (err, prevResults) => {
             if (err) return res.status(500).json({ error: err.message });
-            
-            if (section_id) {
-                db.query(
-                    'UPDATE sections SET current_students = current_students + 1 WHERE id = ?',
-                    [section_id]
-                );
-            }
 
-            const sectionSubquery = section_id
-                ? `(SELECT section_name FROM sections WHERE id = ${parseInt(section_id)})`
-                : 'NULL';
-            
-            db.query(
-                `UPDATE students 
-                 SET current_grade_level = ?, 
-                     current_section = ${sectionSubquery},
-                     school_year_started = COALESCE(school_year_started, ?)
-                 WHERE id = ?`,
-                [grade_level, school_year, student_id],
-                (err) => {
-                    if (err) console.error('⚠️ Failed to update student current_grade_level:', err);
-                    else console.log('✅ Auto-updated student.current_grade_level to', grade_level);
+            const previousEnrollment = prevResults.length > 0 ? prevResults[0] : null;
+
+            // ✅ STEP 2: Determine if promotion (grade level changed)
+            const isPromotion = previousEnrollment && 
+                                previousEnrollment.grade_level !== grade_level;
+
+            // ✅ STEP 3: Insert new enrollment
+            const insertQuery = `
+                INSERT INTO student_enrollments 
+                (student_id, grade_level, section_id, school_year, semester, status, remarks)
+                VALUES (?, ?, ?, ?, ?, 'enrolled', ?)
+            `;
+
+            db.query(insertQuery, [
+                student_id, grade_level, section_id || null, 
+                school_year, finalSemester, remarks || null
+            ], (err, result) => {
+                if (err) return res.status(500).json({ error: err.message });
+
+                // ✅ STEP 4: Auto-update previous enrollment to 'passed' if promotion
+                if (isPromotion && previousEnrollment) {
+                    db.query(
+                        `UPDATE student_enrollments 
+                         SET status = 'passed', 
+                             completed_at = NOW(),
+                             remarks = CONCAT(COALESCE(remarks, ''), 
+                                              CASE WHEN remarks IS NULL OR remarks = '' THEN '' ELSE ' | ' END,
+                                              'Auto-promoted to ', ?, ' (SY ', ?, ')')
+                         WHERE id = ?`,
+                        [grade_level, school_year, previousEnrollment.id],
+                        (err) => {
+                            if (err) console.error('⚠️ Failed to mark previous enrollment as passed:', err);
+                            else console.log(`✅ Auto-promoted: Enrollment #${previousEnrollment.id} (${previousEnrollment.grade_level} ${previousEnrollment.school_year}) → passed`);
+                        }
+                    );
                 }
-            );
-            
-            console.log('✅ Enrollment created:', result.insertId);
-            res.status(201).json({ 
-                success: true, 
-                message: 'Student enrolled successfully!',
-                id: result.insertId 
+
+                // Update section count
+                if (section_id) {
+                    db.query(
+                        'UPDATE sections SET current_students = current_students + 1 WHERE id = ?',
+                        [section_id]
+                    );
+                }
+
+                // Update student current_grade_level + current_section
+                const sectionSubquery = section_id
+                    ? `(SELECT section_name FROM sections WHERE id = ${parseInt(section_id)})`
+                    : 'NULL';
+                
+                db.query(
+                    `UPDATE students 
+                     SET current_grade_level = ?, 
+                         current_section = ${sectionSubquery},
+                         school_year_started = COALESCE(school_year_started, ?),
+                         enrollment_status = 'active'
+                     WHERE id = ?`,
+                    [grade_level, school_year, student_id],
+                    (err) => {
+                        if (err) console.error('⚠️ Failed to update student current_grade_level:', err);
+                        else console.log('✅ Auto-updated student.current_grade_level to', grade_level);
+                    }
+                );
+                
+                console.log('✅ Enrollment created:', result.insertId);
+                res.status(201).json({ 
+                    success: true, 
+                    message: isPromotion 
+                        ? `Student enrolled in ${grade_level}! Previous grade auto-marked as 'passed'.`
+                        : 'Student enrolled successfully!',
+                    id: result.insertId,
+                    previousStatus: isPromotion ? 'passed' : null
+                });
             });
         });
     });
@@ -2326,19 +2371,21 @@ app.post('/api/registrar/enrollments', (req, res) => {
 
 // =============================================
 // 47. ENROLLMENTS - Update Enrollment
+// ✅ Auto-marks previous enrollment as 'passed' if promotion
 // =============================================
 app.put('/api/registrar/enrollments/:id', (req, res) => {
     const { id } = req.params;
     const { grade_level, section_id, school_year, semester, status, remarks } = req.body;
 
-    const checkQuery = `SELECT id, student_id FROM student_enrollments WHERE id = ?`;
+    const checkQuery = `SELECT id, student_id, grade_level, school_year, status FROM student_enrollments WHERE id = ?`;
     db.query(checkQuery, [id], (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
         if (results.length === 0) {
             return res.status(404).json({ error: 'Enrollment not found' });
         }
 
-        const studentId = results[0].student_id;
+        const currentEnrollment = results[0];
+        const studentId = currentEnrollment.student_id;
         const finalSemester = semester || 'Full Year';
 
         const updateQuery = `
@@ -2357,7 +2404,43 @@ app.put('/api/registrar/enrollments/:id', (req, res) => {
         ], (err) => {
             if (err) return res.status(500).json({ error: err.message });
 
-            if (status === 'enrolled') {
+            // ✅ Auto-update previous enrollments if status became 'enrolled' (promotion)
+            if (status === 'enrolled' || !status) {
+                const prevQuery = `
+                    SELECT id, grade_level, school_year 
+                    FROM student_enrollments 
+                    WHERE student_id = ? 
+                      AND id != ? 
+                      AND status = 'enrolled'
+                    ORDER BY id DESC
+                `;
+                db.query(prevQuery, [studentId, id], (err, prevResults) => {
+                    if (err) console.error('⚠️ Failed to fetch previous enrollments:', err);
+
+                    if (prevResults && prevResults.length > 0) {
+                        prevResults.forEach(prev => {
+                            const isPromotion = prev.grade_level !== grade_level;
+
+                            if (isPromotion) {
+                                db.query(
+                                    `UPDATE student_enrollments 
+                                     SET status = 'passed', 
+                                         completed_at = NOW(),
+                                         remarks = CONCAT(COALESCE(remarks, ''), 
+                                                          CASE WHEN remarks IS NULL OR remarks = '' THEN '' ELSE ' | ' END,
+                                                          'Auto-promoted to ', ?, ' (SY ', ?, ')')
+                                     WHERE id = ?`,
+                                    [grade_level, school_year, prev.id],
+                                    (err) => {
+                                        if (err) console.error('⚠️ Failed to mark previous as passed:', err);
+                                        else console.log(`✅ Auto-promoted: Enrollment #${prev.id} → passed`);
+                                    }
+                                );
+                            }
+                        });
+                    }
+                });
+
                 const sectionSubquery = section_id
                     ? `(SELECT section_name FROM sections WHERE id = ${parseInt(section_id)})`
                     : 'NULL';
