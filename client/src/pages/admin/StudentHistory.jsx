@@ -194,11 +194,24 @@ const StudentHistory = () => {
             const gradeLevel = enrollment.grade_level;
 
             // ✅ Get grades ONLY for THIS enrollment
-            const gradesForEnrollment = grades.filter(g =>
+            let gradesForEnrollment = grades.filter(g =>
                 g.enrollment_id === enrollment.id
             );
 
-            const subjectsForGrade = allSubjects.filter(s => s.grade_level === gradeLevel);
+            if (gradesForEnrollment.length === 0) {
+                gradesForEnrollment = grades.filter(g =>
+                    g.school_year === enrollment.school_year &&
+                    g.grade_level === enrollment.grade_level
+                );
+            }
+
+            const activeSubjects = allSubjects.filter(s => s.grade_level === gradeLevel);
+            const subjectNamesFromGrades = [...new Set(gradesForEnrollment.map(g => g.subject))];
+            const allSubjectNames = [
+                ...activeSubjects.map(s => s.subject_name),
+                ...subjectNamesFromGrades.filter(name => !activeSubjects.some(s => s.subject_name === name))
+            ];
+            const subjectsForGrade = allSubjectNames.map(name => ({ subject_name: name }));
             const detection = detectSystem(gradesForEnrollment);
 
             const subjects = subjectsForGrade.map(subject => {

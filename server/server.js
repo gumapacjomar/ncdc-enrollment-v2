@@ -3255,6 +3255,8 @@ app.get('/api/registrar/grades/student/:studentId', (req, res) => {
     const query = `
         SELECT 
             g.id,
+            g.student_id,
+            g.enrollment_id,
             g.subject,
             g.grade,
             g.remarks,
@@ -3263,7 +3265,7 @@ app.get('/api/registrar/grades/student/:studentId', (req, res) => {
             e.grade_level,
             e.school_year
         FROM grades g
-        JOIN student_enrollments e ON g.enrollment_id = e.id
+        LEFT JOIN student_enrollments e ON g.enrollment_id = e.id
         WHERE g.student_id = ?
         ORDER BY e.school_year DESC, g.subject
     `;
@@ -3645,10 +3647,13 @@ app.get('/api/admin/reports/student-history/:studentId', (req, res) => {
                     g.remarks,
                     g.quarter,
                     g.semester,
-                    g.enrollment_id
+                    g.enrollment_id,
+                    e.grade_level,
+                    e.school_year
                 FROM grades g
+                LEFT JOIN student_enrollments e ON g.enrollment_id = e.id
                 WHERE g.student_id = ?
-                ORDER BY g.enrollment_id ASC, g.subject
+                ORDER BY e.school_year ASC, g.subject
             `;
 
             db.query(gradesQuery, [studentId], (err, grades) => {
