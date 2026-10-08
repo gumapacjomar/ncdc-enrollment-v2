@@ -20,8 +20,6 @@ const StudentHistory = () => {
     const user = JSON.parse(localStorage.getItem('user'));
     const currentPath = location.pathname;
 
-    const gradeLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
-
     useEffect(() => {
         if (!user || (user.role !== 'admin' && user.role !== 'registrar')) {
             navigate('/login');
@@ -133,7 +131,6 @@ const StudentHistory = () => {
     };
 
     const menuItems = getMenuItems();
-
     const isActive = (path) => currentPath === path;
 
     const handleLogout = () => {
@@ -173,7 +170,8 @@ const StudentHistory = () => {
     };
 
     // =============================================
-    // ✅ FIXED: buildRoadmap — handles duplicate enrollments
+    // ✅ FIXED: buildRoadmap — per enrollment, dili per grade level
+    // Kada enrollment (school year) kay separate record — labi na retained
     // =============================================
     const buildRoadmap = () => {
         if (!history) return [];
@@ -181,40 +179,22 @@ const StudentHistory = () => {
         const enrollments = history.enrollments || [];
         const grades = history.grades || [];
 
-        return gradeLevels.map(gradeLevel => {
-            // ✅ Get ALL enrollments for this grade level (handle duplicates)
-            const enrollmentsForGrade = enrollments
-                .filter(e => e.grade_level === gradeLevel)
-                .sort((a, b) => {
-                    // Sort by school_year descending — latest first
-                    if (a.school_year > b.school_year) return -1;
-                    if (a.school_year < b.school_year) return 1;
-                    return 0;
-                });
+        // ✅ Sort enrollments chronologically (oldest first)
+        const sortedEnrollments = [...enrollments].sort((a, b) => {
+            if (a.school_year !== b.school_year) return a.school_year.localeCompare(b.school_year);
+            return a.id - b.id;
+        });
 
-            // ✅ Pick the PRIMARY enrollment:
-            // Priority: 1) enrolled status (current) → 2) latest passed → 3) latest by SY
-            let enrollment = null;
-            if (enrollmentsForGrade.length > 0) {
-                // Try to find "enrolled" status first
-                const enrolledOne = enrollmentsForGrade.find(e => e.status === 'enrolled');
-                if (enrolledOne) {
-                    enrollment = enrolledOne;
-                } else {
-                    // Otherwise, latest (highest school_year)
-                    enrollment = enrollmentsForGrade[0];
-                }
-            }
+        // ✅ Map EACH enrollment to a separate roadmap entry
+        return sortedEnrollments.map((enrollment, idx) => {
+            const gradeLevel = enrollment.grade_level;
 
-            const subjectsForGrade = allSubjects.filter(s => s.grade_level === gradeLevel);
-
-            // ✅ Get grades from ALL enrollments for this grade level
-            // (para kung naay duplicate, ma-combine ang grades from both)
-            const allEnrollmentIds = enrollmentsForGrade.map(e => e.id);
+            // Get grades for THIS specific enrollment only
             const gradesForEnrollment = grades.filter(g =>
-                allEnrollmentIds.includes(g.enrollment_id)
+                g.enrollment_id === enrollment.id
             );
 
+            const subjectsForGrade = allSubjects.filter(s => s.grade_level === gradeLevel);
             const detection = detectSystem(gradesForEnrollment);
 
             const subjects = subjectsForGrade.map(subject => {
@@ -232,62 +212,72 @@ const StudentHistory = () => {
                 const remarks = cellValues.filter(Boolean).slice(-1)[0]?.remarks || null;
 
                 const dynamicFields = {};
-                cellValues.forEach((cell, idx) => {
+                cellValues.forEach((cell, i) => {
                     if (detection.isOldSystem) {
-                        dynamicFields[`q${idx + 1}`] = cell?.grade || null;
+                        dynamicFields[`q${i + 1}`] = cell?.grade || null;
                     } else {
-                        dynamicFields[`t${idx + 1}`] = cell?.grade || null;
+                        dynamicFields[`t${i + 1}`] = cell?.grade || null;
                     }
                 });
+
+                // ✅ Check kung naay term < 75 (DepEd promotion rule)
+                const hasFailingTerm = cellValues.some(c => c && parseFloat(c.grade) < 75);
 
                 return {
                     subject_name: subject.subject_name,
                     ...dynamicFields,
                     finalAve,
                     remarks,
-                    isFailed: finalAve && parseFloat(finalAve) < 75
+                    isFailed: hasFailingTerm,
+                    hasFailingTerm
                 };
             });
 
+            // ✅ Status determination
             let status = 'future';
-            if (enrollment) {
-                if (enrollment.status === 'enrolled') status = 'current';
-                else if (enrollment.status === 'passed' || enrollment.status === 'graduated') status = 'completed';
-                else if (enrollment.status === 'failed') status = 'failed';
-                else status = 'completed';
-            }
+            if (enrollment.status === 'enrolled') status = 'current';
+            else if (enrollment.status === 'passed') status = 'completed';
+            else if (enrollment.status === 'graduated') status = 'graduated';
+            else if (enrollment.status === 'failed') status = 'failed';
+            else if (enrollment.status === 'dropped') status = 'dropped';
+            else if (enrollment.status === 'transferred') status = 'transferred';
+            else status = 'completed';
 
             const hasFailedSubjects = subjects.some(s => s.isFailed);
 
-            // ✅ FIX: Compute honor ONLY if naay at least 1 finalAve
+            // ✅ Honor computation
             const subjectsWithGrades = subjects.filter(s => s.finalAve !== null);
             const hasAnyGrades = subjectsWithGrades.length > 0;
 
             let honor = { isHonor: false, tier: null };
-            if (hasAnyGrades) {
+            if (hasAnyGrades && !hasFailedSubjects) {
                 const computedHonor = computeHonorFromSubjects(
                     subjectsWithGrades.map(s => ({ subject: s.subject_name, finalAve: s.finalAve }))
                 );
-                // ✅ Only mark as honor kung naay minimum 1 valid subject with grade
-                if (computedHonor.isHonor && subjectsWithGrades.length > 0) {
+                if (computedHonor.isHonor) {
                     honor = computedHonor;
                 }
             }
 
+            // ✅ Detect if this is a RETAIN (same grade as previous enrollment)
+            const previousEnrollment = idx > 0 ? sortedEnrollments[idx - 1] : null;
+            const isRetained = previousEnrollment && previousEnrollment.grade_level === gradeLevel;
+
             return {
                 grade_level: gradeLevel,
                 enrollment,
-                enrollmentsForGrade, // ✅ Include all enrollments for reference
+                school_year: enrollment.school_year,
+                section: enrollment.section_name,
                 subjects,
                 status,
-                school_year: enrollment?.school_year || null,
-                section: enrollment?.section_name || null,
                 hasFailedSubjects,
                 isOldSystem: detection.isOldSystem,
                 displayHeaders: detection.displayHeaders,
                 columnsCount: detection.columns.length,
-                honor, // ✅ NEW: only has isHonor=true kung naay grades
-                hasAnyGrades // ✅ NEW: flag para sa debug/display
+                honor,
+                hasAnyGrades,
+                isRetained,
+                enrollmentIndex: idx
             };
         });
     };
@@ -310,9 +300,22 @@ const StudentHistory = () => {
     const renderRoadmap = () => {
         const roadmap = buildRoadmap();
 
+        if (roadmap.length === 0) {
+            return (
+                <div style={{
+                    background: 'white', padding: '60px', borderRadius: '14px',
+                    textAlign: 'center', color: '#6b7280', border: '1px solid #e5e7eb'
+                }}>
+                    <div style={{ fontSize: '64px', marginBottom: '12px' }}>📭</div>
+                    <h3 style={{ color: '#1f2937', marginBottom: '8px' }}>Walay Enrollment Records</h3>
+                    <p>Wala pa ma-enroll ni nga student sa bisan unsang grade level.</p>
+                </div>
+            );
+        }
+
         return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                {roadmap.map((grade) => {
+                {roadmap.map((grade, idx) => {
                     let bgColor, borderColor, headerBg, headerText, badgeColor;
 
                     if (grade.status === 'current') {
@@ -326,35 +329,66 @@ const StudentHistory = () => {
                         borderColor = '#10b981';
                         headerBg = 'linear-gradient(135deg, #059669, #10b981)';
                         headerText = 'white';
-                        badgeColor = { bg: '#10b981', color: 'white', label: 'Completed' };
+                        badgeColor = { bg: '#10b981', color: 'white', label: '✅ Completed' };
                     } else if (grade.status === 'failed') {
                         bgColor = '#fee2e2';
                         borderColor = '#ef4444';
                         headerBg = 'linear-gradient(135deg, #dc2626, #ef4444)';
                         headerText = 'white';
                         badgeColor = { bg: '#dc2626', color: 'white', label: '❌ FAILED' };
+                    } else if (grade.status === 'graduated') {
+                        bgColor = '#e0e7ff';
+                        borderColor = '#8b5cf6';
+                        headerBg = 'linear-gradient(135deg, #7c3aed, #8b5cf6)';
+                        headerText = 'white';
+                        badgeColor = { bg: '#7c3aed', color: 'white', label: '🎓 Graduated' };
+                    } else if (grade.status === 'dropped' || grade.status === 'transferred') {
+                        bgColor = '#fef3c7';
+                        borderColor = '#f59e0b';
+                        headerBg = 'linear-gradient(135deg, #d97706, #f59e0b)';
+                        headerText = 'white';
+                        badgeColor = { bg: '#d97706', color: 'white', label: `⚠️ ${grade.status.toUpperCase()}` };
                     } else {
                         bgColor = '#f9fafb';
                         borderColor = '#e5e7eb';
                         headerBg = '#f3f4f6';
                         headerText = '#6b7280';
-                        badgeColor = { bg: '#e5e7eb', color: '#6b7280', label: 'Not Yet Enrolled' };
+                        badgeColor = { bg: '#e5e7eb', color: '#6b7280', label: 'Unknown' };
                     }
 
                     const overallAve = calculateOverallAverage(grade.subjects);
-                    // ✅ FIX: isHonor only true if hasAnyGrades and honor.isHonor
                     const isHonor = grade.hasAnyGrades && grade.honor && grade.honor.isHonor;
 
                     return (
-                        <div key={grade.grade_level} style={{
+                        <div key={`${grade.grade_level}-${grade.school_year}-${idx}`} style={{
                             background: 'white',
                             borderRadius: '16px',
                             border: `2px solid ${isHonor ? grade.honor.tier.border : borderColor}`,
                             overflow: 'hidden',
                             boxShadow: isHonor
                                 ? `0 4px 20px ${grade.honor.tier.border}40`
-                                : '0 2px 8px rgba(0,0,0,0.04)'
+                                : '0 2px 8px rgba(0,0,0,0.04)',
+                            position: 'relative'
                         }}>
+                            {/* ✅ Retain indicator — separate entry para sa same grade */}
+                            {grade.isRetained && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '12px',
+                                    right: '12px',
+                                    background: '#fbbf24',
+                                    color: '#78350f',
+                                    padding: '4px 12px',
+                                    borderRadius: '12px',
+                                    fontSize: '11px',
+                                    fontWeight: '800',
+                                    zIndex: 10,
+                                    boxShadow: '0 2px 8px rgba(251,191,36,0.4)'
+                                }}>
+                                    🔁 RETAINED
+                                </div>
+                            )}
+
                             <div style={{
                                 padding: '16px 24px',
                                 background: headerBg,
@@ -395,7 +429,6 @@ const StudentHistory = () => {
                                             {grade.isOldSystem ? '📗 4Q' : '📘 3T'}
                                         </span>
                                     )}
-                                    {/* ✅ FIX: Honor Badge — only if hasAnyGrades */}
                                     {isHonor && (
                                         <span style={{
                                             fontSize: '12px',
@@ -442,17 +475,7 @@ const StudentHistory = () => {
                                 </div>
                             </div>
 
-                            {grade.status === 'future' ? (
-                                <div style={{
-                                    padding: '40px 20px', textAlign: 'center',
-                                    background: '#f9fafb', color: '#9ca3af'
-                                }}>
-                                    <div style={{ fontSize: '40px', marginBottom: '8px' }}>⏳</div>
-                                    <div style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280' }}>
-                                        Wala pa naabot ang student ani nga grade
-                                    </div>
-                                </div>
-                            ) : grade.subjects.length === 0 ? (
+                            {grade.subjects.length === 0 ? (
                                 <div style={{
                                     padding: '40px 20px', textAlign: 'center',
                                     background: bgColor, color: '#6b7280'
@@ -673,7 +696,7 @@ const StudentHistory = () => {
                         📚 Student Academic History
                     </h1>
                     <p style={{ color: '#6b7280', marginTop: '4px', fontSize: '15px' }}>
-                        Complete curriculum roadmap — Grade 1 to Grade 6
+                        Complete enrollment history — kada school year separate record
                     </p>
                 </div>
 
@@ -827,11 +850,11 @@ const StudentHistory = () => {
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <span style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#fef3c7', border: '2px solid #f59e0b' }}></span>
-                                <span style={{ color: '#92400e' }}>🏆 Honor Student</span>
+                                <span style={{ color: '#92400e' }}>🔁 Retained</span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#f9fafb', border: '2px solid #e5e7eb' }}></span>
-                                <span style={{ color: '#6b7280' }}>Not Yet Enrolled</span>
+                                <span style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#fef3c7', border: '2px solid #f59e0b' }}></span>
+                                <span style={{ color: '#92400e' }}>🏆 Honor Student</span>
                             </div>
                         </div>
 
@@ -844,7 +867,7 @@ const StudentHistory = () => {
                     }}>
                         <div style={{ fontSize: '64px', marginBottom: '12px' }}>📚</div>
                         <h3 style={{ color: '#1f2937', marginBottom: '8px' }}>Search for a Student</h3>
-                        <p>Type a student's name or ID above to view their complete Grade 1-6 academic roadmap.</p>
+                        <p>Type a student's name or ID above to view their complete enrollment history.</p>
                     </div>
                 )}
 
