@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import API from '../services/api';
 
@@ -14,6 +14,15 @@ const LoginPage = () => {
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotMessage, setForgotMessage] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
+
+  // ✅ Mobile detection
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleChange = (e) => {
     setFormData({
@@ -74,7 +83,7 @@ const LoginPage = () => {
 
   return (
     <div style={{
-      height: '100vh',
+      minHeight: '100vh',
       width: '100vw',
       background: `
         linear-gradient(135deg, rgba(26, 86, 219, 0.85) 0%, rgba(16, 185, 129, 0.75) 100%),
@@ -83,74 +92,82 @@ const LoginPage = () => {
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       display: 'flex',
-      alignItems: 'center',
+      alignItems: isMobile ? 'flex-start' : 'center',
       justifyContent: 'center',
-      padding: '20px',
-      overflow: 'hidden'
+      padding: isMobile ? '16px' : '20px',
+      paddingTop: isMobile ? '30px' : '20px',
+      overflow: isMobile ? 'auto' : 'hidden',
+      boxSizing: 'border-box'
     }}>
       {/* Glassmorphism Container */}
       <div style={{
         display: 'flex',
+        flexDirection: isMobile ? 'column' : 'row',
         maxWidth: '1000px',
         width: '100%',
-        height: '600px',
-        maxHeight: '90vh',
+        height: isMobile ? 'auto' : '600px',
+        maxHeight: isMobile ? 'none' : '90vh',
         background: 'rgba(255,255,255,0.12)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        borderRadius: '24px',
+        borderRadius: isMobile ? '20px' : '24px',
         boxShadow: '0 25px 60px rgba(0,0,0,0.3)',
         overflow: 'hidden',
         position: 'relative',
         border: '1px solid rgba(255,255,255,0.15)'
       }}>
-        {/* Glass Decorative Elements */}
-        <div style={{
-          position: 'absolute',
-          top: '-80px',
-          right: '-80px',
-          width: '200px',
-          height: '200px',
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.05)',
-          border: '1px solid rgba(255,255,255,0.08)'
-        }} />
-        <div style={{
-          position: 'absolute',
-          bottom: '-60px',
-          left: '-60px',
-          width: '150px',
-          height: '150px',
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.05)',
-          border: '1px solid rgba(255,255,255,0.08)'
-        }} />
+        {/* Glass Decorative Elements — only show sa desktop */}
+        {!isMobile && (
+          <>
+            <div style={{
+              position: 'absolute',
+              top: '-80px',
+              right: '-80px',
+              width: '200px',
+              height: '200px',
+              borderRadius: '50%',
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.08)'
+            }} />
+            <div style={{
+              position: 'absolute',
+              bottom: '-60px',
+              left: '-60px',
+              width: '150px',
+              height: '150px',
+              borderRadius: '50%',
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.08)'
+            }} />
+          </>
+        )}
 
-        {/* Left Side - Branding (Glass) */}
+        {/* Left Side - Branding */}
         <div style={{
-          flex: '1',
+          flex: isMobile ? 'none' : '1',
           background: 'rgba(255,255,255,0.08)',
-          padding: '50px 40px',
+          padding: isMobile ? '28px 24px' : '50px 40px',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
           color: 'white',
           position: 'relative',
           overflow: 'hidden',
-          borderRight: '1px solid rgba(255,255,255,0.08)'
+          borderRight: isMobile ? 'none' : '1px solid rgba(255,255,255,0.08)',
+          borderBottom: isMobile ? '1px solid rgba(255,255,255,0.08)' : 'none'
         }}>
           <div style={{ position: 'relative', zIndex: 2 }}>
-            {/* Logo - Graduation Cap */}
+            {/* Logo */}
             <div style={{
               background: 'rgba(255,255,255,0.15)',
-              width: '70px',
-              height: '70px',
+              width: isMobile ? '56px' : '70px',
+              height: isMobile ? '56px' : '70px',
               borderRadius: '50%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              marginBottom: '24px',
-              fontSize: '36px',
+              marginBottom: isMobile ? '14px' : '24px',
+              fontSize: isMobile ? '28px' : '36px',
               border: '2px solid rgba(255,255,255,0.2)',
               backdropFilter: 'blur(10px)'
             }}>
@@ -158,73 +175,81 @@ const LoginPage = () => {
             </div>
 
             <h1 style={{
-              fontSize: '32px',
+              fontSize: isMobile ? '24px' : '32px',
               fontWeight: '800',
               marginBottom: '4px',
               letterSpacing: '-1px',
-              textShadow: '0 2px 10px rgba(0,0,0,0.1)'
+              textShadow: '0 2px 10px rgba(0,0,0,0.1)',
+              margin: '0 0 4px 0'
             }}>
               NCDC
             </h1>
             <p style={{
-              fontSize: '14px',
+              fontSize: isMobile ? '12px' : '14px',
               opacity: 0.9,
-              marginBottom: '24px',
-              fontWeight: '300'
+              marginBottom: isMobile ? '16px' : '24px',
+              fontWeight: '300',
+              margin: '0 0 16px 0'
             }}>
               National Child Development Center
             </p>
 
-            <div style={{
-              borderTop: '1px solid rgba(255,255,255,0.15)',
-              paddingTop: '24px',
-              marginTop: '4px'
-            }}>
-              <p style={{
-                fontSize: '14px',
-                opacity: 0.8,
-                lineHeight: '1.8'
+            {/* Quote — hide sa mobile para save space */}
+            {!isMobile && (
+              <div style={{
+                borderTop: '1px solid rgba(255,255,255,0.15)',
+                paddingTop: '24px',
+                marginTop: '4px'
               }}>
-                "Nurturing Today,<br />
-                <strong style={{ color: '#fcd34d' }}>Empowering Tomorrow</strong>"
-              </p>
-            </div>
+                <p style={{
+                  fontSize: '14px',
+                  opacity: 0.8,
+                  lineHeight: '1.8',
+                  margin: 0
+                }}>
+                  "Nurturing Today,<br />
+                  <strong style={{ color: '#fcd34d' }}>Empowering Tomorrow</strong>"
+                </p>
+              </div>
+            )}
 
-            {/* Features */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '10px',
-              marginTop: '24px'
-            }}>
+            {/* Features — hide sa mobile */}
+            {!isMobile && (
               <div style={{
-                background: 'rgba(255,255,255,0.08)',
-                padding: '10px 14px',
-                borderRadius: '10px',
-                backdropFilter: 'blur(5px)',
-                border: '1px solid rgba(255,255,255,0.08)'
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '10px',
+                marginTop: '24px'
               }}>
-                <span style={{ fontSize: '18px' }}>🛡️</span>
-                <p style={{ fontSize: '11px', marginTop: '2px', opacity: 0.9 }}>Safe Environment</p>
+                <div style={{
+                  background: 'rgba(255,255,255,0.08)',
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  backdropFilter: 'blur(5px)',
+                  border: '1px solid rgba(255,255,255,0.08)'
+                }}>
+                  <span style={{ fontSize: '18px' }}>🛡️</span>
+                  <p style={{ fontSize: '11px', marginTop: '2px', opacity: 0.9, margin: '2px 0 0 0' }}>Safe Environment</p>
+                </div>
+                <div style={{
+                  background: 'rgba(255,255,255,0.08)',
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  backdropFilter: 'blur(5px)',
+                  border: '1px solid rgba(255,255,255,0.08)'
+                }}>
+                  <span style={{ fontSize: '18px' }}>📚</span>
+                  <p style={{ fontSize: '11px', marginTop: '2px', opacity: 0.9, margin: '2px 0 0 0' }}>Quality Education</p>
+                </div>
               </div>
-              <div style={{
-                background: 'rgba(255,255,255,0.08)',
-                padding: '10px 14px',
-                borderRadius: '10px',
-                backdropFilter: 'blur(5px)',
-                border: '1px solid rgba(255,255,255,0.08)'
-              }}>
-                <span style={{ fontSize: '18px' }}>📚</span>
-                <p style={{ fontSize: '11px', marginTop: '2px', opacity: 0.9 }}>Quality Education</p>
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
-        {/* Right Side - Login Form (Glass) */}
+        {/* Right Side - Login Form */}
         <div style={{
-          flex: '1.2',
-          padding: '50px 45px',
+          flex: isMobile ? 'none' : '1.2',
+          padding: isMobile ? '28px 24px' : '50px 45px',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
@@ -233,19 +258,21 @@ const LoginPage = () => {
           {!showForgotPassword ? (
             // ========== LOGIN FORM ==========
             <>
-              <div style={{ marginBottom: '24px' }}>
+              <div style={{ marginBottom: isMobile ? '20px' : '24px' }}>
                 <h2 style={{
-                  fontSize: '26px',
+                  fontSize: isMobile ? '22px' : '26px',
                   fontWeight: '700',
                   color: 'white',
                   marginBottom: '2px',
-                  textShadow: '0 2px 10px rgba(0,0,0,0.1)'
+                  textShadow: '0 2px 10px rgba(0,0,0,0.1)',
+                  margin: '0 0 2px 0'
                 }}>
                   Welcome Back! 🎓
                 </h2>
                 <p style={{
                   color: 'rgba(255,255,255,0.8)',
-                  fontSize: '14px'
+                  fontSize: isMobile ? '13px' : '14px',
+                  margin: 0
                 }}>
                   Sign in to continue to your account
                 </p>
@@ -267,13 +294,13 @@ const LoginPage = () => {
               )}
 
               <form onSubmit={handleSubmit}>
-                <div style={{ marginBottom: '14px' }}>
+                <div style={{ marginBottom: isMobile ? '14px' : '14px' }}>
                   <label style={{
                     display: 'block',
                     fontSize: '13px',
                     fontWeight: '600',
                     color: 'rgba(255,255,255,0.9)',
-                    marginBottom: '4px'
+                    marginBottom: '6px'
                   }}>
                     Username
                   </label>
@@ -286,10 +313,10 @@ const LoginPage = () => {
                     required
                     style={{
                       width: '100%',
-                      padding: '12px 16px',
+                      padding: isMobile ? '14px 16px' : '12px 16px',
                       border: '1px solid rgba(255,255,255,0.2)',
                       borderRadius: '10px',
-                      fontSize: '14px',
+                      fontSize: isMobile ? '16px' : '14px',
                       transition: 'all 0.3s',
                       background: 'rgba(255,255,255,0.08)',
                       backdropFilter: 'blur(10px)',
@@ -308,13 +335,13 @@ const LoginPage = () => {
                   />
                 </div>
 
-                <div style={{ marginBottom: '18px' }}>
+                <div style={{ marginBottom: isMobile ? '16px' : '18px' }}>
                   <label style={{
                     display: 'block',
                     fontSize: '13px',
                     fontWeight: '600',
                     color: 'rgba(255,255,255,0.9)',
-                    marginBottom: '4px'
+                    marginBottom: '6px'
                   }}>
                     Password
                   </label>
@@ -327,10 +354,10 @@ const LoginPage = () => {
                     required
                     style={{
                       width: '100%',
-                      padding: '12px 16px',
+                      padding: isMobile ? '14px 16px' : '12px 16px',
                       border: '1px solid rgba(255,255,255,0.2)',
                       borderRadius: '10px',
-                      fontSize: '14px',
+                      fontSize: isMobile ? '16px' : '14px',
                       transition: 'all 0.3s',
                       background: 'rgba(255,255,255,0.08)',
                       backdropFilter: 'blur(10px)',
@@ -353,7 +380,9 @@ const LoginPage = () => {
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  marginBottom: '20px'
+                  marginBottom: isMobile ? '18px' : '20px',
+                  flexWrap: 'wrap',
+                  gap: '8px'
                 }}>
                   <label style={{
                     display: 'flex',
@@ -396,10 +425,10 @@ const LoginPage = () => {
                     width: '100%',
                     background: loading ? 'rgba(255,255,255,0.3)' : 'linear-gradient(135deg, #fcd34d 0%, #f59e0b 100%)',
                     color: loading ? 'rgba(255,255,255,0.6)' : '#1f2937',
-                    padding: '14px',
+                    padding: isMobile ? '16px' : '14px',
                     borderRadius: '10px',
                     border: 'none',
-                    fontSize: '15px',
+                    fontSize: isMobile ? '16px' : '15px',
                     fontWeight: '700',
                     cursor: loading ? 'not-allowed' : 'pointer',
                     transition: 'all 0.3s',
@@ -426,7 +455,8 @@ const LoginPage = () => {
               }}>
                 <p style={{
                   fontSize: '13px',
-                  color: 'rgba(255,255,255,0.7)'
+                  color: 'rgba(255,255,255,0.7)',
+                  margin: 0
                 }}>
                   Don't have an account?{' '}
                   <Link to="/apply" style={{
@@ -473,17 +503,19 @@ const LoginPage = () => {
             <>
               <div style={{ marginBottom: '24px' }}>
                 <h2 style={{
-                  fontSize: '26px',
+                  fontSize: isMobile ? '22px' : '26px',
                   fontWeight: '700',
                   color: 'white',
                   marginBottom: '2px',
-                  textShadow: '0 2px 10px rgba(0,0,0,0.1)'
+                  textShadow: '0 2px 10px rgba(0,0,0,0.1)',
+                  margin: '0 0 2px 0'
                 }}>
                   🔑 Forgot Password?
                 </h2>
                 <p style={{
                   color: 'rgba(255,255,255,0.8)',
-                  fontSize: '14px'
+                  fontSize: '14px',
+                  margin: 0
                 }}>
                   Enter your email address and we'll notify the Principal.
                 </p>
@@ -511,7 +543,7 @@ const LoginPage = () => {
                     fontSize: '13px',
                     fontWeight: '600',
                     color: 'rgba(255,255,255,0.9)',
-                    marginBottom: '4px'
+                    marginBottom: '6px'
                   }}>
                     Email Address
                   </label>
@@ -523,10 +555,10 @@ const LoginPage = () => {
                     required
                     style={{
                       width: '100%',
-                      padding: '12px 16px',
+                      padding: isMobile ? '14px 16px' : '12px 16px',
                       border: '1px solid rgba(255,255,255,0.2)',
                       borderRadius: '10px',
-                      fontSize: '14px',
+                      fontSize: isMobile ? '16px' : '14px',
                       transition: 'all 0.3s',
                       background: 'rgba(255,255,255,0.08)',
                       backdropFilter: 'blur(10px)',
@@ -543,7 +575,7 @@ const LoginPage = () => {
                       e.target.style.background = 'rgba(255,255,255,0.08)';
                     }}
                   />
-                  <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', marginTop: '4px' }}>
+                  <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', marginTop: '4px', margin: '4px 0 0 0' }}>
                     We'll notify the Principal to generate a temporary password for you.
                   </p>
                 </div>
@@ -555,10 +587,10 @@ const LoginPage = () => {
                     width: '100%',
                     background: forgotLoading ? 'rgba(255,255,255,0.3)' : 'linear-gradient(135deg, #fcd34d 0%, #f59e0b 100%)',
                     color: forgotLoading ? 'rgba(255,255,255,0.6)' : '#1f2937',
-                    padding: '14px',
+                    padding: isMobile ? '16px' : '14px',
                     borderRadius: '10px',
                     border: 'none',
-                    fontSize: '15px',
+                    fontSize: isMobile ? '16px' : '15px',
                     fontWeight: '700',
                     cursor: forgotLoading ? 'not-allowed' : 'pointer',
                     transition: 'all 0.3s',
@@ -599,7 +631,7 @@ const LoginPage = () => {
             borderTop: '1px solid rgba(255,255,255,0.08)',
             textAlign: 'center'
           }}>
-            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>
+            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: 0 }}>
               © 2026 <strong style={{ color: 'rgba(255,255,255,0.7)' }}>NCDC</strong>. All rights reserved.
             </p>
           </div>
