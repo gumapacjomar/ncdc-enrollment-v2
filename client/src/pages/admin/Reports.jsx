@@ -21,8 +21,8 @@ const Reports = () => {
   });
   const [monthlyData, setMonthlyData] = useState([]);
   const [filterStatus, setFilterStatus] = useState('all');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [filterSY, setFilterSY] = useState('all'); // ✅ NEW: SY filter
+  const [availableEnrollmentSYs, setAvailableEnrollmentSYs] = useState([]); // ✅ NEW
   const [searchTerm, setSearchTerm] = useState('');
 
   // ── Academic Reports State ──
@@ -57,7 +57,7 @@ const Reports = () => {
   }, [navigate]);
 
   // ══════════════════════════════════════════════════════════
-  // ENROLLMENT DATA (existing)
+  // ENROLLMENT DATA
   // ══════════════════════════════════════════════════════════
   const fetchEnrollmentData = async () => {
     setLoading(true);
@@ -65,11 +65,20 @@ const Reports = () => {
     try {
       const response = await API.get('/admin/reports');
       if (response.data.success) {
-        setApplications(response.data.data || []);
+        const apps = response.data.data || [];
+        setApplications(apps);
         setStats(response.data.stats || {
           total: 0, pending: 0, approved: 0, confirmed: 0, rejected: 0, declined: 0
         });
         setMonthlyData(response.data.monthlyData || []);
+
+        // ✅ Collect unique academic years from applications
+        const sySet = new Set();
+        apps.forEach(app => {
+          if (app.academic_year) sySet.add(app.academic_year);
+        });
+        const syList = Array.from(sySet).sort((a, b) => b.localeCompare(a));
+        setAvailableEnrollmentSYs(syList);
       } else {
         setError('Failed to load reports data');
       }
@@ -82,7 +91,7 @@ const Reports = () => {
   };
 
   // ══════════════════════════════════════════════════════════
-  // ACADEMIC DATA (NEW)
+  // ACADEMIC DATA
   // ══════════════════════════════════════════════════════════
   const fetchAcademicData = async (overrideSY = null) => {
     setAcademicLoading(true);
@@ -90,8 +99,8 @@ const Reports = () => {
       const enrollRes = await API.get('/registrar/enrollments');
       const allEnrollments = Array.isArray(enrollRes.data) ? enrollRes.data : [];
 
-      // Valid statuses
-      const validStatuses = ['passed', 'enrolled', 'graduated'];
+      // ✅ Include 'failed' status para maapil ang retained students
+      const validStatuses = ['passed', 'enrolled', 'graduated', 'failed'];
       const validEnrollments = allEnrollments.filter(e =>
         validStatuses.includes(e.status)
       );
@@ -281,35 +290,30 @@ const Reports = () => {
   };
 
   // ══════════════════════════════════════════════════════════
-  // ENROLLMENT FILTERS (existing)
+  // ENROLLMENT FILTERS
   // ══════════════════════════════════════════════════════════
   const filteredApplications = applications.filter(app => {
     const fullName = `${app.first_name || ''} ${app.middle_name || ''} ${app.last_name || ''}`.toLowerCase();
     const matchesSearch = fullName.includes(searchTerm.toLowerCase()) ||
                           (app.email || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterStatus === 'all' || app.status === filterStatus;
+    // ✅ SY filter instead of date range
+    const matchesSY = filterSY === 'all' || app.academic_year === filterSY;
 
-    let matchesDate = true;
-    if (dateFrom && dateTo && app.created_at) {
-      const appDate = new Date(app.created_at);
-      const from = new Date(dateFrom);
-      const to = new Date(dateTo);
-      matchesDate = appDate >= from && appDate <= to;
-    }
-
-    return matchesSearch && matchesFilter && matchesDate;
+    return matchesSearch && matchesFilter && matchesSY;
   });
 
   // ══════════════════════════════════════════════════════════
-  // EXPORT CSV (existing — application export)
+  // EXPORT CSV — Enrollment
   // ══════════════════════════════════════════════════════════
   const exportEnrollmentToCSV = () => {
-    const headers = ['Name', 'Email', 'Contact', 'Status', 'Date', 'Teacher', 'Principal'];
+    const headers = ['Name', 'Email', 'Contact', 'Status', 'School Year', 'Date', 'Teacher', 'Principal'];
     const rows = filteredApplications.map(app => [
       `${app.first_name || ''} ${app.last_name || ''}`,
       app.email || 'N/A',
       app.contact_number || 'N/A',
       app.status || 'N/A',
+      app.academic_year || 'N/A',
       app.created_at ? new Date(app.created_at).toLocaleDateString() : 'N/A',
       app.registrar_first_name ? `${app.registrar_first_name} ${app.registrar_last_name || ''}` : 'N/A',
       app.admin_first_name ? `${app.admin_first_name} ${app.admin_last_name || ''}` : 'N/A'
@@ -329,16 +333,14 @@ const Reports = () => {
     window.URL.revokeObjectURL(url);
   };
 
-  // ✅ NEW: Export Academic reports to CSV
+  // ✅ Export Academic reports to CSV
   const exportAcademicToCSV = () => {
     const lines = [];
 
-    // Header
     lines.push(`Academic Report — SY ${academicSY}`);
     lines.push(`Generated: ${new Date().toLocaleString()}`);
     lines.push('');
 
-    // Stats summary
     lines.push('== SUMMARY ==');
     lines.push(`Total Students,${academicStats.totalStudents}`);
     lines.push(`Honor Students,${academicStats.honorStudents}`);
@@ -350,7 +352,6 @@ const Reports = () => {
     lines.push(`Retained,${academicStats.retainedStudents}`);
     lines.push('');
 
-    // Honor students
     lines.push('== HONOR STUDENTS ==');
     lines.push('Rank,Student ID,Name,Grade & Section,Average,Lowest,Tier');
     honorStudentsList.forEach((s, idx) => {
@@ -366,7 +367,6 @@ const Reports = () => {
     });
     lines.push('');
 
-    // Failing students
     lines.push('== FAILING STUDENTS ==');
     lines.push('Student ID,Name,Grade & Section,Failing Subjects');
     failingStudentsList.forEach(s => {
@@ -623,30 +623,26 @@ const Reports = () => {
                     <option value="declined">Declined</option>
                   </select>
                 </div>
+
+                {/* ✅ REPLACED: School Year filter instead of Date From */}
                 <div>
-                  <label style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>Date From</label>
-                  <input
-                    type="date" value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
+                  <label style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>📅 School Year</label>
+                  <select
+                    value={filterSY}
+                    onChange={(e) => setFilterSY(e.target.value)}
                     style={{
                       width: '100%', padding: '8px 12px',
                       border: '1px solid #d1d5db', borderRadius: '6px',
                       fontSize: '14px', marginTop: '4px'
                     }}
-                  />
+                  >
+                    <option value="all">All School Years</option>
+                    {availableEnrollmentSYs.map(sy => (
+                      <option key={sy} value={sy}>{sy}</option>
+                    ))}
+                  </select>
                 </div>
-                <div>
-                  <label style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>Date To</label>
-                  <input
-                    type="date" value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                    style={{
-                      width: '100%', padding: '8px 12px',
-                      border: '1px solid #d1d5db', borderRadius: '6px',
-                      fontSize: '14px', marginTop: '4px'
-                    }}
-                  />
-                </div>
+
                 <div>
                   <label style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>Search</label>
                   <input
@@ -690,6 +686,7 @@ const Reports = () => {
                         <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#374151' }}>Name</th>
                         <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#374151' }}>Email</th>
                         <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#374151' }}>Status</th>
+                        <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#374151' }}>School Year</th>
                         <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#374151' }}>Date</th>
                         <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#374151' }}>Teacher</th>
                         <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#374151' }}>Principal</th>
@@ -707,6 +704,10 @@ const Reports = () => {
                             <span style={statusBadge(app.status)}>
                               {app.status ? app.status.charAt(0).toUpperCase() + app.status.slice(1) : 'N/A'}
                             </span>
+                          </td>
+                          {/* ✅ NEW: School Year column */}
+                          <td style={{ padding: '10px', fontSize: '13px', color: '#6b7280', fontWeight: '600' }}>
+                            {app.academic_year || 'N/A'}
                           </td>
                           <td style={{ padding: '10px', fontSize: '13px', color: '#6b7280' }}>
                             {formatDate(app.created_at)}
