@@ -207,7 +207,7 @@ const GradeReports = () => {
                                         {student.first_name} {student.middle_name || ''} {student.last_name}
                                     </td>
                                     <td style={{ padding: '12px 16px', fontSize: '13px', color: '#6b7280' }}>
-                                        {student.current_grade_level || '—'} {student.current_section ? `- ${student.current_section}` : ''}
+                                        {student.enrollment_grade || student.current_grade_level || '—'} {student.current_section ? `- ${student.current_section}` : ''}
                                     </td>
                                     <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', color: '#6b7280', fontWeight: '600' }}>
                                         {student.school_year || '—'}
@@ -255,6 +255,7 @@ const GradeReports = () => {
         const filtered = filterData(promotionList);
         const passed = filtered.filter(s => s.promotion_status === 'PASSED');
         const failed = filtered.filter(s => s.promotion_status === 'FAILED');
+        const retainedHistory = filtered.filter(s => s.is_retained === 'YES');
 
         if (filtered.length === 0) {
             return (
@@ -376,7 +377,7 @@ const GradeReports = () => {
                                                 {student.first_name} {student.middle_name || ''} {student.last_name}
                                             </td>
                                             <td style={{ padding: '12px 16px', fontSize: '13px', color: '#6b7280' }}>
-                                                {student.current_grade_level || '—'} {student.current_section ? `- ${student.current_section}` : ''}
+                                                {student.enrollment_grade || student.current_grade_level || '—'} {student.current_section ? `- ${student.current_section}` : ''}
                                             </td>
                                             <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', color: '#6b7280', fontWeight: '600' }}>
                                                 {student.school_year || '—'}
@@ -391,10 +392,10 @@ const GradeReports = () => {
                                                 <span style={{
                                                     padding: '6px 14px', borderRadius: '12px',
                                                     fontSize: '12px', fontWeight: '700',
-                                                    background: isFailed ? '#fee2e2' : '#d1fae5',
-                                                    color: isFailed ? '#991b1b' : '#065f46'
+                                                    background: isFailed ? '#fee2e2' : (student.is_retained === 'YES' ? '#fef3c7' : '#d1fae5'),
+                                                    color: isFailed ? '#991b1b' : (student.is_retained === 'YES' ? '#92400e' : '#065f46')
                                                 }}>
-                                                    {isFailed ? '❌ RETAINED' : '✅ PROMOTED'}
+                                                    {isFailed ? '❌ RETAINED' : (student.is_retained === 'YES' ? '🔁 RETAINED (Previous)' : '✅ PROMOTED')}
                                                 </span>
                                             </td>
                                             <td style={{ padding: '12px 16px', textAlign: 'center' }}>
