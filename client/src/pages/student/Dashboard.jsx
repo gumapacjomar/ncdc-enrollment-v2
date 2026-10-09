@@ -15,6 +15,25 @@ const StudentDashboard = () => {
   const [profilePicPreview, setProfilePicPreview] = useState(null);
   const [activeMenu, setActiveMenu] = useState('dashboard');
 
+  // ✅ Mobile detection + drawer state
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (!mobile) setSidebarOpen(false); // close drawer kung mo-balik sa desktop
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // ✅ Auto-close drawer kung mo-switch tab sa mobile
+  useEffect(() => {
+    if (isMobile) setSidebarOpen(false);
+  }, [activeMenu, isMobile]);
+
   const [editMode, setEditMode] = useState(false);
   const [editData, setEditData] = useState({
     first_name: '',
@@ -536,15 +555,21 @@ const StudentDashboard = () => {
       {/* Welcome Card */}
       <div style={{
         background: 'linear-gradient(135deg, #1a56db, #3b82f6)',
-        borderRadius: '16px', padding: '28px', color: 'white',
-        marginBottom: '24px', boxShadow: '0 8px 25px rgba(26,86,219,0.3)'
+        borderRadius: '16px',
+        padding: isMobile ? '20px' : '28px',
+        color: 'white',
+        marginBottom: '24px',
+        boxShadow: '0 8px 25px rgba(26,86,219,0.3)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '14px' : '20px', flexWrap: 'wrap' }}>
           <div style={{
-            width: '72px', height: '72px', borderRadius: '50%',
+            width: isMobile ? '56px' : '72px',
+            height: isMobile ? '56px' : '72px',
+            borderRadius: '50%',
             background: 'rgba(255,255,255,0.2)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '28px', fontWeight: '700', overflow: 'hidden'
+            fontSize: isMobile ? '22px' : '28px', fontWeight: '700', overflow: 'hidden',
+            flexShrink: 0
           }}>
             {profilePicPreview ? (
               <img src={profilePicPreview} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -552,11 +577,11 @@ const StudentDashboard = () => {
               student?.first_name?.charAt(0).toUpperCase() || 'S'
             )}
           </div>
-          <div style={{ flex: 1 }}>
-            <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '700' }}>
+          <div style={{ flex: 1, minWidth: '180px' }}>
+            <h2 style={{ margin: 0, fontSize: isMobile ? '18px' : '24px', fontWeight: '700' }}>
               Welcome, {student?.first_name} {student?.last_name}!
             </h2>
-            <p style={{ margin: '6px 0 0', fontSize: '14px', opacity: 0.95 }}>
+            <p style={{ margin: '6px 0 0', fontSize: isMobile ? '12px' : '14px', opacity: 0.95 }}>
               🆔 {student?.student_id || 'N/A'} &nbsp;|&nbsp;
               🎓 {student?.current_grade_level || 'Not Assigned'}
               {student?.current_section && ` (${student.current_section})`}
@@ -578,22 +603,22 @@ const StudentDashboard = () => {
           background: '#fee2e2',
           border: '2px solid #dc2626',
           borderRadius: '14px',
-          padding: '20px 24px',
+          padding: isMobile ? '16px' : '20px 24px',
           marginBottom: '24px',
           display: 'flex',
           alignItems: 'flex-start',
-          gap: '16px'
+          gap: isMobile ? '12px' : '16px'
         }}>
-          <div style={{ fontSize: '36px', flexShrink: 0 }}>⚠️</div>
+          <div style={{ fontSize: isMobile ? '28px' : '36px', flexShrink: 0 }}>⚠️</div>
           <div style={{ flex: 1 }}>
             <h3 style={{
-              margin: '0 0 6px', fontSize: '17px',
+              margin: '0 0 6px', fontSize: isMobile ? '15px' : '17px',
               fontWeight: '700', color: '#991b1b'
             }}>
               Failed Subject Warning
             </h3>
             <p style={{
-              margin: '0 0 10px', fontSize: '14px',
+              margin: '0 0 10px', fontSize: isMobile ? '13px' : '14px',
               color: '#7f1d1d', lineHeight: '1.5'
             }}>
               Adunay kay subject(s) nga naay <strong>term below 75</strong>. Base sa promotion policy, kailangan ka <strong>mag-RETAIN</strong> sa same grade level.
@@ -616,8 +641,9 @@ const StudentDashboard = () => {
       {/* Info Cards */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '16px', marginBottom: '24px'
+        gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: isMobile ? '12px' : '16px',
+        marginBottom: '24px'
       }}>
         <div style={{
           background: 'white', padding: '20px', borderRadius: '12px',
@@ -685,8 +711,8 @@ const StudentDashboard = () => {
       {/* Quick Links */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '16px'
+        gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: isMobile ? '12px' : '16px'
       }}>
         {[
           { icon: '📈', label: 'My Grades', desc: 'View all grades', action: 'grades' },
@@ -703,7 +729,7 @@ const StudentDashboard = () => {
               else setActiveMenu(item.action);
             }}
             style={{
-              background: 'white', padding: '20px', borderRadius: '12px',
+              background: 'white', padding: isMobile ? '16px 12px' : '20px', borderRadius: '12px',
               border: '1px solid #e5e7eb', textAlign: 'center',
               cursor: 'pointer', transition: 'all 0.3s ease'
             }}
@@ -718,8 +744,8 @@ const StudentDashboard = () => {
               e.currentTarget.style.borderColor = '#e5e7eb';
             }}
           >
-            <div style={{ fontSize: '32px' }}>{item.icon}</div>
-            <div style={{ fontSize: '14px', fontWeight: '600', color: '#1f2937', marginTop: '8px' }}>
+            <div style={{ fontSize: isMobile ? '28px' : '32px' }}>{item.icon}</div>
+            <div style={{ fontSize: isMobile ? '13px' : '14px', fontWeight: '600', color: '#1f2937', marginTop: '8px' }}>
               {item.label}
             </div>
             <div style={{ fontSize: '12px', color: '#6b7280' }}>{item.desc}</div>
@@ -756,21 +782,21 @@ const StudentDashboard = () => {
             background: '#fee2e2',
             border: '2px solid #dc2626',
             borderRadius: '14px',
-            padding: '20px 24px',
+            padding: isMobile ? '16px' : '20px 24px',
             display: 'flex',
             alignItems: 'flex-start',
-            gap: '16px'
+            gap: isMobile ? '12px' : '16px'
           }}>
-            <div style={{ fontSize: '36px', flexShrink: 0 }}>⚠️</div>
+            <div style={{ fontSize: isMobile ? '28px' : '36px', flexShrink: 0 }}>⚠️</div>
             <div style={{ flex: 1 }}>
               <h3 style={{
-                margin: '0 0 6px', fontSize: '17px',
+                margin: '0 0 6px', fontSize: isMobile ? '15px' : '17px',
                 fontWeight: '700', color: '#991b1b'
               }}>
                 RETENTION — Kailangan nimo mag-enroll balik sa {currentEnrollment.grade_level}
               </h3>
               <p style={{
-                margin: '0 0 10px', fontSize: '14px',
+                margin: '0 0 10px', fontSize: isMobile ? '13px' : '14px',
                 color: '#7f1d1d', lineHeight: '1.5'
               }}>
                 Adunay kay <strong>failing term(s)</strong> sa mosunod nga subject(s):
@@ -800,7 +826,7 @@ const StudentDashboard = () => {
         {/* Current Enrollment Card */}
         {currentEnrollment && (
           <div style={{
-            background: 'white', padding: '24px', borderRadius: '14px',
+            background: 'white', padding: isMobile ? '20px' : '24px', borderRadius: '14px',
             border: '1px solid #e5e7eb',
             boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
           }}>
@@ -809,7 +835,7 @@ const StudentDashboard = () => {
             </h3>
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+              gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fit, minmax(150px, 1fr))',
               gap: '16px'
             }}>
               <div>
@@ -849,7 +875,7 @@ const StudentDashboard = () => {
         {/* Pending Request Card */}
         {pendingRequest && (
           <div style={{
-            background: '#fef3c7', padding: '24px', borderRadius: '14px',
+            background: '#fef3c7', padding: isMobile ? '20px' : '24px', borderRadius: '14px',
             border: '2px solid #f59e0b'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
@@ -868,7 +894,7 @@ const StudentDashboard = () => {
               padding: '12px 16px', borderRadius: '8px',
               fontSize: '14px', color: '#92400e',
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(200px, 1fr))',
               gap: '8px'
             }}>
               <div><strong>Applying for:</strong> {pendingRequest.next_grade_level}</div>
@@ -882,7 +908,7 @@ const StudentDashboard = () => {
         {/* Approved Request Card */}
         {approvedRequest && !pendingRequest && (
           <div style={{
-            background: '#d1fae5', padding: '24px', borderRadius: '14px',
+            background: '#d1fae5', padding: isMobile ? '20px' : '24px', borderRadius: '14px',
             border: '2px solid #10b981'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -907,16 +933,16 @@ const StudentDashboard = () => {
             background: isRetained
               ? 'linear-gradient(135deg, #f59e0b, #fbbf24)'
               : 'linear-gradient(135deg, #10b981, #34d399)',
-            padding: '32px', borderRadius: '14px', color: 'white',
+            padding: isMobile ? '24px 20px' : '32px', borderRadius: '14px', color: 'white',
             textAlign: 'center',
             boxShadow: isRetained
               ? '0 8px 25px rgba(245,158,11,0.3)'
               : '0 8px 25px rgba(16,185,129,0.3)'
           }}>
-            <div style={{ fontSize: '64px', marginBottom: '12px' }}>
+            <div style={{ fontSize: isMobile ? '48px' : '64px', marginBottom: '12px' }}>
               {isRetained ? '🔁' : '🎓'}
             </div>
-            <h3 style={{ fontSize: '24px', fontWeight: '700', margin: '0 0 8px' }}>
+            <h3 style={{ fontSize: isMobile ? '20px' : '24px', fontWeight: '700', margin: '0 0 8px' }}>
               {isRetained
                 ? `Retain sa ${targetGrade}`
                 : `Ready for ${targetGrade}!`
@@ -959,7 +985,7 @@ const StudentDashboard = () => {
         {/* Grade 6 edge case */}
         {isGrade6 && !pendingRequest && !approvedRequest && (
           <div style={{
-            background: 'white', padding: '60px', borderRadius: '14px',
+            background: 'white', padding: isMobile ? '40px 20px' : '60px', borderRadius: '14px',
             textAlign: 'center', color: '#6b7280',
             border: '1px solid #e5e7eb'
           }}>
@@ -981,7 +1007,7 @@ const StudentDashboard = () => {
         {/* Not eligible (edge case) */}
         {!canApply && !pendingRequest && !approvedRequest && !isGrade6 && !isRetained && (
           <div style={{
-            background: 'white', padding: '60px', borderRadius: '14px',
+            background: 'white', padding: isMobile ? '40px 20px' : '60px', borderRadius: '14px',
             textAlign: 'center', color: '#6b7280',
             border: '1px solid #e5e7eb'
           }}>
@@ -998,7 +1024,7 @@ const StudentDashboard = () => {
         {/* Request History */}
         {reenrollRequests.length > 0 && (
           <div style={{
-            background: 'white', padding: '24px', borderRadius: '14px',
+            background: 'white', padding: isMobile ? '20px' : '24px', borderRadius: '14px',
             border: '1px solid #e5e7eb',
             boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
           }}>
@@ -1081,7 +1107,7 @@ const StudentDashboard = () => {
     <div>
       {gradesBySY.length === 0 ? (
         <div style={{
-          background: 'white', padding: '60px', borderRadius: '14px',
+          background: 'white', padding: isMobile ? '40px 20px' : '60px', borderRadius: '14px',
           textAlign: 'center', color: '#6b7280', border: '1px solid #e5e7eb'
         }}>
           <div style={{ fontSize: '48px', marginBottom: '8px' }}>📭</div>
@@ -1108,7 +1134,7 @@ const StudentDashboard = () => {
                 boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
               }}>
                 <div style={{
-                  padding: '16px 24px',
+                  padding: isMobile ? '14px 16px' : '16px 24px',
                   background: groupHasFailing
                     ? 'linear-gradient(135deg, #dc2626, #ef4444)'
                     : 'linear-gradient(135deg, #1a56db, #3b82f6)',
@@ -1117,7 +1143,7 @@ const StudentDashboard = () => {
                   alignItems: 'center', flexWrap: 'wrap', gap: '12px'
                 }}>
                   <div>
-                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>
+                    <h3 style={{ margin: 0, fontSize: isMobile ? '16px' : '18px', fontWeight: '700' }}>
                       🎓 {group.grade_level}
                     </h3>
                     <p style={{ margin: '4px 0 0', fontSize: '13px', opacity: 0.9 }}>
@@ -1133,8 +1159,8 @@ const StudentDashboard = () => {
                   </div>
                 </div>
 
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isMobile ? '600px' : 'auto' }}>
                     <thead>
                       <tr style={{ background: '#f9fafb', borderBottom: '2px solid #e5e7eb' }}>
                         <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Subject</th>
@@ -1227,7 +1253,7 @@ const StudentDashboard = () => {
     if (syList.length === 0) {
       return (
         <div style={{
-          background: 'white', padding: '60px', borderRadius: '14px',
+          background: 'white', padding: isMobile ? '40px 20px' : '60px', borderRadius: '14px',
           textAlign: 'center', color: '#6b7280', border: '1px solid #e5e7eb'
         }}>
           <div style={{ fontSize: '48px', marginBottom: '8px' }}>📭</div>
@@ -1242,7 +1268,7 @@ const StudentDashboard = () => {
     return (
       <div>
         <div style={{
-          background: 'white', padding: '16px 20px', borderRadius: '12px',
+          background: 'white', padding: isMobile ? '14px 16px' : '16px 20px', borderRadius: '12px',
           marginBottom: '20px', border: '1px solid #e5e7eb',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           flexWrap: 'wrap', gap: '12px',
@@ -1285,7 +1311,7 @@ const StudentDashboard = () => {
             background: '#fee2e2',
             border: '2px solid #dc2626',
             borderRadius: '12px',
-            padding: '16px 20px',
+            padding: isMobile ? '14px 16px' : '16px 20px',
             marginBottom: '20px',
             display: 'flex',
             alignItems: 'flex-start',
@@ -1311,18 +1337,18 @@ const StudentDashboard = () => {
         <div id="report-card" style={{
           background: 'white', borderRadius: '14px',
           border: '1px solid #e5e7eb',
-          padding: '40px',
+          padding: isMobile ? '20px 16px' : '40px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
         }}>
           <div style={{ textAlign: 'center', marginBottom: '24px', borderBottom: '2px solid #1a56db', paddingBottom: '20px' }}>
             <div style={{ fontSize: '28px', marginBottom: '4px' }}>🎓</div>
-            <h1 style={{ margin: 0, fontSize: '22px', fontWeight: '700', color: '#1a56db' }}>
+            <h1 style={{ margin: 0, fontSize: isMobile ? '18px' : '22px', fontWeight: '700', color: '#1a56db' }}>
               NCDC ELEMENTARY SCHOOL
             </h1>
             <p style={{ margin: '4px 0 0', fontSize: '14px', color: '#6b7280' }}>
               National Children Development Center
             </p>
-            <h2 style={{ margin: '12px 0 0', fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>
+            <h2 style={{ margin: '12px 0 0', fontSize: isMobile ? '16px' : '18px', fontWeight: '700', color: '#1f2937' }}>
               OFFICIAL REPORT CARD
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: '14px', color: '#6b7280' }}>
@@ -1332,14 +1358,14 @@ const StudentDashboard = () => {
 
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fit, minmax(200px, 1fr))',
             gap: '12px',
             marginBottom: '24px',
             background: '#f8fafc',
             padding: '16px',
             borderRadius: '8px'
           }}>
-            <div>
+            <div style={{ gridColumn: isMobile ? '1 / -1' : 'auto' }}>
               <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>Student Name</div>
               <div style={{ fontSize: '15px', fontWeight: '700', color: '#1f2937' }}>
                 {student?.first_name} {student?.middle_name || ''} {student?.last_name}
@@ -1365,8 +1391,8 @@ const StudentDashboard = () => {
             </div>
           </div>
 
-          <div style={{ overflowX: 'auto', marginBottom: '24px' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #e5e7eb' }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', marginBottom: '24px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #e5e7eb', minWidth: isMobile ? '600px' : 'auto' }}>
               <thead>
                 <tr style={{ background: '#1a56db', color: 'white' }}>
                   <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '13px', fontWeight: '700', border: '1px solid #e5e7eb' }}>SUBJECTS</th>
@@ -1466,7 +1492,7 @@ const StudentDashboard = () => {
               background: reportData.hasFailingSubjects
                 ? 'linear-gradient(135deg, #fee2e2, #fecaca)'
                 : 'linear-gradient(135deg, #f0f4ff, #e0e7ff)',
-              padding: '20px',
+              padding: isMobile ? '16px' : '20px',
               borderRadius: '10px',
               marginBottom: '24px',
               display: 'flex',
@@ -1478,7 +1504,7 @@ const StudentDashboard = () => {
               <div>
                 <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '500' }}>GENERAL AVERAGE</div>
                 <div style={{
-                  fontSize: '32px', fontWeight: '800',
+                  fontSize: isMobile ? '26px' : '32px', fontWeight: '800',
                   color: reportData.hasFailingSubjects
                     ? '#991b1b'
                     : (parseFloat(reportData.overallAverage) >= 75 ? '#065f46' : '#991b1b')
@@ -1486,10 +1512,10 @@ const StudentDashboard = () => {
                   {reportData.overallAverage}
                 </div>
               </div>
-              <div style={{ textAlign: 'right' }}>
+              <div style={{ textAlign: isMobile ? 'left' : 'right' }}>
                 <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '500' }}>REMARKS</div>
                 <div style={{
-                  fontSize: '18px', fontWeight: '700',
+                  fontSize: isMobile ? '16px' : '18px', fontWeight: '700',
                   color: reportData.hasFailingSubjects
                     ? '#991b1b'
                     : (parseFloat(reportData.overallAverage) >= 75 ? '#065f46' : '#991b1b')
@@ -1527,8 +1553,8 @@ const StudentDashboard = () => {
             paddingTop: '20px',
             borderTop: '1px solid #e5e7eb',
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '40px'
+            gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+            gap: isMobile ? '24px' : '40px'
           }}>
             <div>
               <div style={{ borderBottom: '1px solid #1f2937', paddingBottom: '4px', marginBottom: '4px' }}></div>
@@ -1552,14 +1578,14 @@ const StudentDashboard = () => {
   const renderRemarks = () => (
     <div style={{
       background: 'white', borderRadius: '12px',
-      border: '1px solid #e5e7eb', padding: '24px'
+      border: '1px solid #e5e7eb', padding: isMobile ? '16px' : '24px'
     }}>
       <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1f2937', marginBottom: '20px' }}>
         💬 My Remarks ({remarks.length})
       </h3>
 
       {remarks.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px', color: '#6b7280' }}>
+        <div style={{ textAlign: 'center', padding: isMobile ? '40px 20px' : '60px', color: '#6b7280' }}>
           <div style={{ fontSize: '48px', marginBottom: '8px' }}>💭</div>
           <h3 style={{ color: '#1f2937', marginBottom: '8px' }}>No Remarks Yet</h3>
           <p style={{ fontSize: '14px' }}>Wala pay remarks nga gi-record sa imong teacher.</p>
@@ -1568,7 +1594,7 @@ const StudentDashboard = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {remarks.map((r, idx) => (
             <div key={r.id || idx} style={{
-              padding: '16px 20px', borderRadius: '12px',
+              padding: isMobile ? '14px 16px' : '16px 20px', borderRadius: '12px',
               border: '1px solid #e5e7eb', background: '#f9fafb'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
@@ -1601,14 +1627,14 @@ const StudentDashboard = () => {
   const renderHistory = () => (
     <div style={{
       background: 'white', borderRadius: '12px',
-      border: '1px solid #e5e7eb', padding: '24px'
+      border: '1px solid #e5e7eb', padding: isMobile ? '16px' : '24px'
     }}>
       <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1f2937', marginBottom: '20px' }}>
         📚 My Enrollment History ({enrollments.length})
       </h3>
 
       {enrollments.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px', color: '#6b7280' }}>
+        <div style={{ textAlign: 'center', padding: isMobile ? '40px 20px' : '60px', color: '#6b7280' }}>
           <div style={{ fontSize: '48px', marginBottom: '8px' }}>📭</div>
           <h3 style={{ color: '#1f2937', marginBottom: '8px' }}>No Enrollment Records</h3>
           <p style={{ fontSize: '14px' }}>Wala pay enrollment records.</p>
@@ -1617,7 +1643,7 @@ const StudentDashboard = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {enrollments.map((e, idx) => (
             <div key={e.id || idx} style={{
-              padding: '16px 20px', borderRadius: '12px',
+              padding: isMobile ? '14px 16px' : '16px 20px', borderRadius: '12px',
               border: '1px solid #e5e7eb', borderLeft: '4px solid #1a56db',
               background: '#f9fafb'
             }}>
@@ -1656,9 +1682,18 @@ const StudentDashboard = () => {
     return (
       <div style={{
         background: 'white', borderRadius: '12px',
-        border: '1px solid #e5e7eb', padding: '32px'
+        border: '1px solid #e5e7eb', padding: isMobile ? '20px 16px' : '32px'
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #e5e7eb', paddingBottom: '12px' }}>
+        <div style={{
+          display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
+          justifyContent: 'space-between',
+          alignItems: isMobile ? 'stretch' : 'center',
+          gap: isMobile ? '12px' : 0,
+          marginBottom: '20px',
+          borderBottom: '1px solid #e5e7eb',
+          paddingBottom: '12px'
+        }}>
           <h2 style={{ fontSize: '20px', color: '#1f2937', margin: 0 }}>
             👤 My Profile
           </h2>
@@ -1676,6 +1711,7 @@ const StudentDashboard = () => {
               <button
                 onClick={handleCancelEdit}
                 style={{
+                  flex: isMobile ? 1 : 'none',
                   background: '#6b7280', color: 'white', border: 'none',
                   padding: '8px 20px', borderRadius: '8px',
                   cursor: 'pointer', fontSize: '14px', fontWeight: '500'
@@ -1685,6 +1721,7 @@ const StudentDashboard = () => {
                 onClick={handleSaveProfile}
                 disabled={editLoading}
                 style={{
+                  flex: isMobile ? 1 : 'none',
                   background: editLoading ? '#93c5fd' : '#10b981', color: 'white',
                   border: 'none', padding: '8px 20px', borderRadius: '8px',
                   cursor: editLoading ? 'not-allowed' : 'pointer',
@@ -1704,7 +1741,7 @@ const StudentDashboard = () => {
         )}
 
         {!editMode ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
             <div>
               <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>Student ID</p>
               <p style={{ fontSize: '16px', fontWeight: '500', color: '#1f2937', margin: '4px 0' }}>
@@ -1719,7 +1756,7 @@ const StudentDashboard = () => {
             </div>
             <div>
               <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>Email</p>
-              <p style={{ fontSize: '16px', fontWeight: '500', color: '#1f2937', margin: '4px 0' }}>{student.email}</p>
+              <p style={{ fontSize: '16px', fontWeight: '500', color: '#1f2937', margin: '4px 0', wordBreak: 'break-word' }}>{student.email}</p>
             </div>
             <div>
               <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>Contact</p>
@@ -1741,7 +1778,7 @@ const StudentDashboard = () => {
             </div>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
             <div>
               <label style={{ fontSize: '13px', color: '#374151', fontWeight: '500' }}>First Name <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 20)</small></label>
               <input type="text" name="first_name" value={editData.first_name} onChange={handleEditChange} maxLength={20}
@@ -1788,29 +1825,140 @@ const StudentDashboard = () => {
       fontFamily: 'Segoe UI, Arial, sans-serif',
       display: 'flex'
     }}>
-      {/* SIDEBAR */}
-      <div style={{
-        width: '280px', minHeight: '100vh', height: '100vh',
-        background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(20px)',
-        borderRight: '1px solid rgba(255,255,255,0.2)',
-        display: 'flex', flexDirection: 'column',
-        position: 'fixed', top: 0, left: 0,
-        overflow: 'hidden', flexShrink: 0, zIndex: 50,
-        boxShadow: '4px 0 30px rgba(0,0,0,0.06)'
-      }}>
-        <div style={{ padding: '24px 24px 20px', borderBottom: '1px solid rgba(255,255,255,0.2)', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      {/* ✅ MOBILE TOP BAR */}
+      {isMobile && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0,
+          height: '60px',
+          background: 'rgba(255,255,255,0.95)',
+          backdropFilter: 'blur(20px)',
+          borderBottom: '1px solid rgba(0,0,0,0.06)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 16px',
+          zIndex: 100,
+          boxShadow: '0 2px 12px rgba(0,0,0,0.04)'
+        }}>
+          <button
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open menu"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              fontSize: '24px',
+              cursor: 'pointer',
+              color: '#1f2937',
+              padding: '8px',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '40px',
+              height: '40px'
+            }}
+          >
+            ☰
+          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{
               background: 'linear-gradient(135deg, #1a56db, #3b82f6)',
-              width: '40px', height: '40px', borderRadius: '10px',
+              width: '32px', height: '32px', borderRadius: '8px',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '20px', boxShadow: '0 4px 15px rgba(26,86,219,0.3)'
+              fontSize: '16px'
             }}>🎓</div>
-            <div>
-              <span style={{ fontSize: '18px', fontWeight: '800', color: '#1f2937' }}>NCDC</span>
-              <br />
-              <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Student Portal</span>
+            <span style={{ fontSize: '16px', fontWeight: '800', color: '#1f2937' }}>NCDC</span>
+          </div>
+
+          <div style={{
+            width: '36px', height: '36px', borderRadius: '50%',
+            background: 'linear-gradient(135deg, #dbeafe, #bfdbfe)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#1a56db', fontSize: '14px', fontWeight: 'bold',
+            overflow: 'hidden', flexShrink: 0,
+            border: '2px solid white',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+          }}>
+            {profilePicPreview ? (
+              <img src={profilePicPreview} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              student?.first_name?.charAt(0).toUpperCase() || 'S'
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ✅ MOBILE BACKDROP */}
+      {isMobile && sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 90,
+            transition: 'opacity 0.3s ease'
+          }}
+        />
+      )}
+
+      {/* SIDEBAR */}
+      <div style={{
+        width: '280px',
+        minHeight: '100vh',
+        height: '100vh',
+        background: 'rgba(255,255,255,0.95)',
+        backdropFilter: 'blur(20px)',
+        borderRight: '1px solid rgba(255,255,255,0.2)',
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        overflow: 'hidden',
+        flexShrink: 0,
+        zIndex: isMobile ? 95 : 50,
+        boxShadow: '4px 0 30px rgba(0,0,0,0.06)',
+        transform: isMobile
+          ? (sidebarOpen ? 'translateX(0)' : 'translateX(-100%)')
+          : 'translateX(0)',
+        transition: 'transform 0.3s ease'
+      }}>
+        <div style={{ padding: '24px 24px 20px', borderBottom: '1px solid rgba(255,255,255,0.2)', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{
+                background: 'linear-gradient(135deg, #1a56db, #3b82f6)',
+                width: '40px', height: '40px', borderRadius: '10px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '20px', boxShadow: '0 4px 15px rgba(26,86,219,0.3)'
+              }}>🎓</div>
+              <div>
+                <span style={{ fontSize: '18px', fontWeight: '800', color: '#1f2937' }}>NCDC</span>
+                <br />
+                <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Student Portal</span>
+              </div>
             </div>
+            {isMobile && (
+              <button
+                onClick={() => setSidebarOpen(false)}
+                aria-label="Close menu"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#9ca3af',
+                  padding: '4px',
+                  lineHeight: 1
+                }}
+              >
+                ×
+              </button>
+            )}
           </div>
         </div>
 
@@ -1941,15 +2089,24 @@ const StudentDashboard = () => {
 
       {/* MAIN CONTENT */}
       <div style={{
-        flex: 1, marginLeft: '280px', padding: '32px 36px',
-        minHeight: '100vh', overflowY: 'auto'
+        flex: 1,
+        marginLeft: isMobile ? 0 : '280px',
+        padding: isMobile ? '76px 16px 24px' : '32px 36px',
+        minHeight: '100vh',
+        overflowY: 'auto',
+        width: isMobile ? '100%' : 'auto',
+        boxSizing: 'border-box'
       }}>
         <div style={{
-          display: 'flex', justifyContent: 'space-between',
-          alignItems: 'center', marginBottom: '24px'
+          display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
+          justifyContent: 'space-between',
+          alignItems: isMobile ? 'flex-start' : 'center',
+          gap: isMobile ? '12px' : 0,
+          marginBottom: '24px'
         }}>
           <div>
-            <h1 style={{ fontSize: '24px', color: '#1f2937', margin: 0, fontWeight: '700' }}>
+            <h1 style={{ fontSize: isMobile ? '20px' : '24px', color: '#1f2937', margin: 0, fontWeight: '700' }}>
               {activeMenu === 'dashboard' && '📊 Dashboard'}
               {activeMenu === 'grades' && '📈 My Grades'}
               {activeMenu === 'reportcard' && '📄 Report Card'}
@@ -1958,7 +2115,7 @@ const StudentDashboard = () => {
               {activeMenu === 'history' && '📚 Enrollment History'}
               {activeMenu === 'profile' && '👤 My Profile'}
             </h1>
-            <p style={{ color: '#6b7280', margin: '4px 0 0', fontSize: '14px' }}>
+            <p style={{ color: '#6b7280', margin: '4px 0 0', fontSize: isMobile ? '13px' : '14px' }}>
               {activeMenu === 'dashboard' && `Welcome back, ${student?.first_name || 'Student'}!`}
               {activeMenu === 'grades' && 'View all your grades per school year.'}
               {activeMenu === 'reportcard' && 'View and print your official report card.'}
@@ -1973,7 +2130,8 @@ const StudentDashboard = () => {
             padding: '8px 16px',
             borderRadius: '20px', fontSize: '13px',
             color: hasFailingSubjects ? '#991b1b' : '#1a56db',
-            fontWeight: '500'
+            fontWeight: '500',
+            alignSelf: isMobile ? 'flex-start' : 'auto'
           }}>
             🎓 {student?.current_grade_level || 'Student'}
           </div>
@@ -1999,22 +2157,25 @@ const StudentDashboard = () => {
             position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
             background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            zIndex: 1000, padding: '20px'
+            zIndex: 1000, padding: isMobile ? '12px' : '20px'
           }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
               background: 'white', borderRadius: '16px',
-              maxWidth: '500px', width: '100%', padding: '32px',
+              maxWidth: '500px', width: '100%',
+              padding: isMobile ? '24px 20px' : '32px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
               boxShadow: '0 25px 60px rgba(0,0,0,0.3)'
             }}
           >
             <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-              <div style={{ fontSize: '56px', marginBottom: '8px' }}>
+              <div style={{ fontSize: isMobile ? '44px' : '56px', marginBottom: '8px' }}>
                 {hasFailingSubjects ? '🔁' : '🎓'}
               </div>
-              <h2 style={{ fontSize: '22px', color: '#1f2937', margin: '0 0 8px' }}>
+              <h2 style={{ fontSize: isMobile ? '18px' : '22px', color: '#1f2937', margin: '0 0 8px' }}>
                 {hasFailingSubjects ? 'Retention Application' : 'Re-enrollment Application'}
               </h2>
               <p style={{ color: '#6b7280', fontSize: '14px', margin: 0 }}>
@@ -2106,7 +2267,7 @@ const StudentDashboard = () => {
               />
             </div>
 
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '10px', flexDirection: isMobile ? 'column' : 'row' }}>
               <button
                 onClick={() => setShowReenrollModal(false)}
                 disabled={reenrollSubmitting}
@@ -2149,11 +2310,13 @@ const StudentDashboard = () => {
           position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
           background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 1000, padding: '20px'
+          zIndex: 1000, padding: isMobile ? '12px' : '20px'
         }}>
           <div style={{
             background: 'white', borderRadius: '16px',
-            maxWidth: '450px', width: '100%', padding: '32px',
+            maxWidth: '450px', width: '100%',
+            padding: isMobile ? '24px 20px' : '32px',
+            maxHeight: '90vh', overflowY: 'auto',
             boxShadow: '0 25px 60px rgba(0,0,0,0.3)'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -2212,7 +2375,7 @@ const StudentDashboard = () => {
                 }} />
             </div>
 
-            <div style={{ display: 'flex', gap: '12px' }}>
+            <div style={{ display: 'flex', gap: '12px', flexDirection: isMobile ? 'column' : 'row' }}>
               <button
                 onClick={() => {
                   setShowPasswordModal(false);

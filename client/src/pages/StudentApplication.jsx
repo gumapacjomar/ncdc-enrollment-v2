@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import API from '../services/api';
 
@@ -35,6 +35,15 @@ const StudentApplication = () => {
 
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // ✅ Mobile detection
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const gradeLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
 
@@ -126,14 +135,16 @@ const StudentApplication = () => {
     }
   };
 
+  // ✅ Responsive styles
   const inputStyle = {
     width: '100%',
-    padding: '8px 12px',
+    padding: isMobile ? '10px 12px' : '8px 12px',
     border: '1px solid #d1d5db',
     borderRadius: '6px',
-    fontSize: '14px',
+    fontSize: isMobile ? '16px' : '14px', // 16px prevents iOS zoom
     marginTop: '4px',
-    boxSizing: 'border-box'
+    boxSizing: 'border-box',
+    fontFamily: 'inherit'
   };
 
   const labelStyle = {
@@ -147,24 +158,52 @@ const StudentApplication = () => {
   const radioStyle = {
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
+    flexWrap: 'wrap',
+    gap: isMobile ? '16px' : '8px',
     marginTop: '4px'
   };
 
   const fileInputStyle = {
     width: '100%',
-    padding: '6px',
+    padding: isMobile ? '10px 8px' : '6px',
     border: '1px solid #d1d5db',
     borderRadius: '6px',
-    fontSize: '13px',
+    fontSize: isMobile ? '14px' : '13px',
     marginTop: '4px',
     background: 'white',
     boxSizing: 'border-box'
   };
 
+  const sectionHeaderStyle = {
+    fontSize: isMobile ? '17px' : '20px',
+    fontWeight: '600',
+    color: '#374151',
+    borderBottom: '2px solid #e5e7eb',
+    paddingBottom: '8px',
+    marginBottom: '16px'
+  };
+
+  const gridStyle = {
+    display: 'grid',
+    gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+    gap: isMobile ? '14px' : '16px'
+  };
+
   return (
-    <div style={{ minHeight: '100vh', background: '#f3f4f6', padding: '32px 16px' }}>
-      <div style={{ maxWidth: '850px', margin: '0 auto', background: 'white', borderRadius: '12px', padding: '32px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+    <div style={{
+      minHeight: '100vh',
+      background: '#f3f4f6',
+      padding: isMobile ? '16px 12px' : '32px 16px',
+      fontFamily: 'Arial, sans-serif'
+    }}>
+      <div style={{
+        maxWidth: '850px',
+        margin: '0 auto',
+        background: 'white',
+        borderRadius: '12px',
+        padding: isMobile ? '20px 16px' : '32px',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+      }}>
 
         {/* Back to Home */}
         <div style={{ marginBottom: '16px' }}>
@@ -183,13 +222,25 @@ const StudentApplication = () => {
 
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: '#1a56db' }}>
+          <h1 style={{
+            fontSize: isMobile ? '20px' : '28px',
+            fontWeight: 'bold',
+            color: '#1a56db',
+            margin: '0 0 8px',
+            lineHeight: 1.3
+          }}>
             🎓 NCDC Elementary Enrollment Application
           </h1>
-          <p style={{ color: '#6b7280' }}>
+          <p style={{ color: '#6b7280', fontSize: isMobile ? '13px' : '14px', margin: '0 0 4px' }}>
             National Children Development Center - Academic Year {formData.academicYear}
           </p>
-          <p style={{ color: '#1a56db', fontSize: '14px', marginTop: '4px', fontWeight: '600' }}>
+          <p style={{
+            color: '#1a56db',
+            fontSize: '14px',
+            marginTop: '4px',
+            fontWeight: '600',
+            margin: '4px 0 0'
+          }}>
             📚 For Grade 1 to Grade 6 students
           </p>
         </div>
@@ -201,7 +252,8 @@ const StudentApplication = () => {
             marginBottom: '16px',
             background: message.type === 'success' ? '#d1fae5' : '#fee2e2',
             color: message.type === 'success' ? '#065f46' : '#991b1b',
-            border: `1px solid ${message.type === 'success' ? '#34d399' : '#fca5a5'}`
+            border: `1px solid ${message.type === 'success' ? '#34d399' : '#fca5a5'}`,
+            fontSize: '14px'
           }}>
             {message.text}
           </div>
@@ -209,12 +261,12 @@ const StudentApplication = () => {
 
         <form onSubmit={handleSubmit}>
           {/* PERSONAL INFORMATION */}
-          <div style={{ marginBottom: '32px' }}>
-            <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#374151', borderBottom: '2px solid #e5e7eb', paddingBottom: '8px', marginBottom: '16px' }}>
+          <div style={{ marginBottom: isMobile ? '24px' : '32px' }}>
+            <h2 style={sectionHeaderStyle}>
               👤 Personal Information
             </h2>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div style={gridStyle}>
               <div>
                 <label style={labelStyle}>First Name * <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 20)</small></label>
                 <input type="text" name="firstName" value={formData.firstName} onChange={handleChange} required maxLength={20} style={inputStyle} placeholder="Enter first name" />
@@ -250,18 +302,48 @@ const StudentApplication = () => {
               <div>
                 <label style={labelStyle}>Gender *</label>
                 <div style={radioStyle}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <input type="radio" name="gender" value="Male" checked={formData.gender === 'Male'} onChange={handleChange} required />
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '15px',
+                    cursor: 'pointer',
+                    padding: isMobile ? '4px 0' : 0
+                  }}>
+                    <input
+                      type="radio"
+                      name="gender"
+                      value="Male"
+                      checked={formData.gender === 'Male'}
+                      onChange={handleChange}
+                      required
+                      style={{ width: '18px', height: '18px' }}
+                    />
                     Male
                   </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '16px' }}>
-                    <input type="radio" name="gender" value="Female" checked={formData.gender === 'Female'} onChange={handleChange} required />
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '15px',
+                    cursor: 'pointer',
+                    padding: isMobile ? '4px 0' : 0
+                  }}>
+                    <input
+                      type="radio"
+                      name="gender"
+                      value="Female"
+                      checked={formData.gender === 'Female'}
+                      onChange={handleChange}
+                      required
+                      style={{ width: '18px', height: '18px' }}
+                    />
                     Female
                   </label>
                 </div>
               </div>
 
-              <div style={{ gridColumn: '1 / -1' }}>
+              <div style={{ gridColumn: isMobile ? 'auto' : '1 / -1' }}>
                 <label style={labelStyle}>Grade Level Applying For *</label>
                 <select
                   name="gradeLevel"
@@ -285,12 +367,12 @@ const StudentApplication = () => {
                 <input type="text" name="contactNumber" value={formData.contactNumber} onChange={handleChange} required maxLength={15} style={inputStyle} placeholder="e.g., 09123456789" />
               </div>
 
-              <div style={{ gridColumn: '1 / -1' }}>
+              <div style={{ gridColumn: isMobile ? 'auto' : '1 / -1' }}>
                 <label style={labelStyle}>Home Address * <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 50)</small></label>
                 <textarea name="address" value={formData.address} onChange={handleChange} required maxLength={50} rows="2" style={inputStyle} placeholder="Enter complete address" />
               </div>
 
-              <div style={{ gridColumn: '1 / -1' }}>
+              <div style={{ gridColumn: isMobile ? 'auto' : '1 / -1' }}>
                 <label style={labelStyle}>Email Address * <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 30)</small></label>
                 <input type="email" name="email" value={formData.email} onChange={handleChange} required maxLength={30} style={inputStyle} placeholder="parent@email.com" />
                 <small style={{ color: '#6b7280', fontSize: '12px' }}>
@@ -301,12 +383,12 @@ const StudentApplication = () => {
           </div>
 
           {/* PARENT/GUARDIAN INFORMATION */}
-          <div style={{ marginBottom: '32px' }}>
-            <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#374151', borderBottom: '2px solid #e5e7eb', paddingBottom: '8px', marginBottom: '16px' }}>
+          <div style={{ marginBottom: isMobile ? '24px' : '32px' }}>
+            <h2 style={sectionHeaderStyle}>
               👨‍👩‍👦 Parent/Guardian Information
             </h2>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div style={gridStyle}>
               <div>
                 <label style={labelStyle}>Father's Name <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 20)</small></label>
                 <input type="text" name="fatherName" value={formData.fatherName} onChange={handleChange} maxLength={20} style={inputStyle} placeholder="Enter father's full name" />
@@ -317,7 +399,7 @@ const StudentApplication = () => {
                 <input type="text" name="fatherOccupation" value={formData.fatherOccupation} onChange={handleChange} maxLength={30} style={inputStyle} placeholder="Enter father's occupation" />
               </div>
 
-              <div style={{ gridColumn: '1 / -1' }}>
+              <div style={{ gridColumn: isMobile ? 'auto' : '1 / -1' }}>
                 <label style={labelStyle}>Father's Contact Number <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 15)</small></label>
                 <input type="text" name="fatherContact" value={formData.fatherContact} onChange={handleChange} maxLength={15} style={inputStyle} placeholder="Enter father's contact number" />
               </div>
@@ -332,7 +414,7 @@ const StudentApplication = () => {
                 <input type="text" name="motherOccupation" value={formData.motherOccupation} onChange={handleChange} maxLength={30} style={inputStyle} placeholder="Enter mother's occupation" />
               </div>
 
-              <div style={{ gridColumn: '1 / -1' }}>
+              <div style={{ gridColumn: isMobile ? 'auto' : '1 / -1' }}>
                 <label style={labelStyle}>Mother's Contact Number <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 15)</small></label>
                 <input type="text" name="motherContact" value={formData.motherContact} onChange={handleChange} maxLength={15} style={inputStyle} placeholder="Enter mother's contact number" />
               </div>
@@ -350,15 +432,15 @@ const StudentApplication = () => {
           </div>
 
           {/* REQUIREMENTS */}
-          <div style={{ marginBottom: '32px' }}>
-            <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#374151', borderBottom: '2px solid #e5e7eb', paddingBottom: '8px', marginBottom: '16px' }}>
+          <div style={{ marginBottom: isMobile ? '24px' : '32px' }}>
+            <h2 style={sectionHeaderStyle}>
               📋 Requirements Checklist
             </h2>
             <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '12px' }}>
               Please upload the following requirements (PDF, JPG, or PNG format)
             </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div style={gridStyle}>
               <div>
                 <label style={labelStyle}>Birth Certificate *</label>
                 <input type="file" name="birthCertificate" onChange={handleChange} accept=".pdf,.jpg,.jpeg,.png" required style={fileInputStyle} />
@@ -385,7 +467,11 @@ const StudentApplication = () => {
             </div>
           </div>
 
-          <div style={{ textAlign: 'center', borderTop: '1px solid #e5e7eb', paddingTop: '24px' }}>
+          <div style={{
+            textAlign: 'center',
+            borderTop: '1px solid #e5e7eb',
+            paddingTop: '24px'
+          }}>
             <button
               type="submit"
               disabled={loading}
@@ -393,12 +479,14 @@ const StudentApplication = () => {
                 background: loading ? '#93c5fd' : '#1a56db',
                 color: 'white',
                 fontWeight: 'bold',
-                padding: '14px 48px',
+                padding: isMobile ? '14px 24px' : '14px 48px',
                 borderRadius: '8px',
                 border: 'none',
                 cursor: loading ? 'not-allowed' : 'pointer',
-                fontSize: '18px',
-                transition: 'background 0.2s'
+                fontSize: isMobile ? '16px' : '18px',
+                transition: 'background 0.2s',
+                width: isMobile ? '100%' : 'auto',
+                maxWidth: isMobile ? '100%' : 'none'
               }}
             >
               {loading ? '⏳ Submitting...' : '📝 Submit Application'}

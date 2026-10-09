@@ -16,6 +16,15 @@ const StudentProfile = () => {
   const [messageType, setMessageType] = useState('');
   const [updating, setUpdating] = useState(false);
 
+  // ✅ Mobile detection
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Change Password States
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
@@ -40,24 +49,22 @@ const StudentProfile = () => {
     setLoading(true);
     setMessage('');
     try {
-      // Use user.id (this is the users table primary key)
       const studentId = user.studentId || user.id;
       console.log('🔍 Fetching student with ID:', studentId);
-      
-      // If studentId is a string like "NCDC-000001", extract the number
+
       let finalId = studentId;
       if (typeof studentId === 'string' && studentId.includes('NCDC-')) {
         const num = studentId.replace('NCDC-', '');
         finalId = parseInt(num);
         console.log('🔍 Converted to number:', finalId);
       }
-      
+
       const response = await API.get(`/student/profile/${finalId}`);
       console.log('✅ Student data received:', response.data);
-      
+
       setStudent(response.data);
       setFormData(response.data);
-      
+
       if (response.data.profile_pic) {
         setProfilePicPreview(`${UPLOADS_URL}/profiles/${response.data.profile_pic}`);
       }
@@ -197,7 +204,12 @@ const StudentProfile = () => {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f1f5f9', fontFamily: 'Arial, sans-serif', padding: '40px' }}>
+    <div style={{
+      minHeight: '100vh',
+      background: '#f1f5f9',
+      fontFamily: 'Arial, sans-serif',
+      padding: isMobile ? '16px' : '40px'
+    }}>
       <div style={{ maxWidth: '800px', margin: '0 auto' }}>
         {/* Back Button */}
         <Link to="/student/dashboard" style={{
@@ -218,7 +230,8 @@ const StudentProfile = () => {
             marginBottom: '16px',
             background: messageType === 'success' ? '#d1fae5' : '#fee2e2',
             color: messageType === 'success' ? '#065f46' : '#991b1b',
-            border: `1px solid ${messageType === 'success' ? '#34d399' : '#fca5a5'}`
+            border: `1px solid ${messageType === 'success' ? '#34d399' : '#fca5a5'}`,
+            fontSize: '14px'
           }}>
             {message}
           </div>
@@ -234,7 +247,7 @@ const StudentProfile = () => {
           {/* Header */}
           <div style={{
             background: 'linear-gradient(135deg, #1a56db 0%, #3b82f6 100%)',
-            padding: '40px 32px 20px',
+            padding: isMobile ? '24px 20px 16px' : '40px 32px 20px',
             color: 'white',
             position: 'relative'
           }}>
@@ -242,34 +255,42 @@ const StudentProfile = () => {
               position: 'absolute',
               top: '-20px',
               right: '-20px',
-              width: '150px',
-              height: '150px',
+              width: isMobile ? '100px' : '150px',
+              height: isMobile ? '100px' : '150px',
               borderRadius: '50%',
               background: 'rgba(255,255,255,0.05)'
             }} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-              <div 
+            <div style={{
+              display: 'flex',
+              flexDirection: isMobile ? 'column' : 'row',
+              alignItems: isMobile ? 'flex-start' : 'center',
+              gap: isMobile ? '14px' : '20px',
+              position: 'relative',
+              zIndex: 1
+            }}>
+              <div
                 onClick={handleProfilePicClick}
                 style={{
-                  width: '80px',
-                  height: '80px',
+                  width: isMobile ? '72px' : '80px',
+                  height: isMobile ? '72px' : '80px',
                   borderRadius: '50%',
                   background: 'rgba(255,255,255,0.2)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '32px',
+                  fontSize: isMobile ? '28px' : '32px',
                   fontWeight: 'bold',
                   border: '3px solid rgba(255,255,255,0.3)',
                   cursor: 'pointer',
                   overflow: 'hidden',
-                  position: 'relative'
+                  position: 'relative',
+                  flexShrink: 0
                 }}
               >
                 {profilePicPreview ? (
-                  <img 
-                    src={profilePicPreview} 
-                    alt="Profile" 
+                  <img
+                    src={profilePicPreview}
+                    alt="Profile"
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
                 ) : (
@@ -296,12 +317,22 @@ const StudentProfile = () => {
                 accept="image/*"
                 style={{ display: 'none' }}
               />
-              <div>
-                <h1 style={{ fontSize: '24px', margin: 0, fontWeight: '700' }}>
+              <div style={{ minWidth: 0, width: '100%' }}>
+                <h1 style={{
+                  fontSize: isMobile ? '20px' : '24px',
+                  margin: 0,
+                  fontWeight: '700',
+                  wordBreak: 'break-word'
+                }}>
                   {student?.first_name} {student?.last_name}
                 </h1>
-                <p style={{ opacity: 0.8, margin: '4px 0 0' }}>Student</p>
-                <p style={{ opacity: 0.7, fontSize: '14px', margin: '2px 0 0' }}>
+                <p style={{ opacity: 0.8, margin: '4px 0 0', fontSize: '14px' }}>Student</p>
+                <p style={{
+                  opacity: 0.7,
+                  fontSize: isMobile ? '13px' : '14px',
+                  margin: '2px 0 0',
+                  wordBreak: 'break-word'
+                }}>
                   Student ID: <strong style={{ color: '#fcd34d' }}>{student?.student_id || 'N/A'}</strong>
                 </p>
                 <p style={{ opacity: 0.6, fontSize: '13px', margin: '2px 0 0' }}>
@@ -312,11 +343,13 @@ const StudentProfile = () => {
           </div>
 
           {/* Profile Details */}
-          <div style={{ padding: '32px' }}>
+          <div style={{ padding: isMobile ? '20px 16px' : '32px' }}>
             <div style={{
               display: 'flex',
+              flexDirection: isMobile ? 'column' : 'row',
               justifyContent: 'space-between',
-              alignItems: 'center',
+              alignItems: isMobile ? 'stretch' : 'center',
+              gap: isMobile ? '12px' : 0,
               marginBottom: '20px',
               borderBottom: '1px solid #e5e7eb',
               paddingBottom: '12px'
@@ -331,10 +364,12 @@ const StudentProfile = () => {
                     background: '#1a56db',
                     color: 'white',
                     border: 'none',
-                    padding: '8px 20px',
+                    padding: '10px 20px',
                     borderRadius: '8px',
                     cursor: 'pointer',
-                    fontSize: '14px'
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    width: isMobile ? '100%' : 'auto'
                   }}
                 >
                   ✏️ Edit Profile
@@ -343,7 +378,11 @@ const StudentProfile = () => {
             </div>
 
             <form onSubmit={handleUpdateProfile}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+                gap: '16px'
+              }}>
                 <div>
                   <label style={{ fontSize: '13px', fontWeight: '500', color: '#374151', display: 'block', marginBottom: '4px' }}>
                     Student ID
@@ -359,7 +398,8 @@ const StudentProfile = () => {
                       borderRadius: '8px',
                       fontSize: '14px',
                       background: '#f3f4f6',
-                      color: '#6b7280'
+                      color: '#6b7280',
+                      boxSizing: 'border-box'
                     }}
                   />
                 </div>
@@ -378,11 +418,12 @@ const StudentProfile = () => {
                       borderRadius: '8px',
                       fontSize: '14px',
                       background: '#f3f4f6',
-                      color: '#6b7280'
+                      color: '#6b7280',
+                      boxSizing: 'border-box'
                     }}
                   />
                 </div>
-                <div>
+                <div style={{ gridColumn: isMobile ? 'auto' : '1 / -1' }}>
                   <label style={{ fontSize: '13px', fontWeight: '500', color: '#374151', display: 'block', marginBottom: '4px' }}>
                     Username
                   </label>
@@ -397,7 +438,8 @@ const StudentProfile = () => {
                       borderRadius: '8px',
                       fontSize: '14px',
                       background: '#f3f4f6',
-                      color: '#6b7280'
+                      color: '#6b7280',
+                      boxSizing: 'border-box'
                     }}
                   />
                 </div>
@@ -411,13 +453,15 @@ const StudentProfile = () => {
                     value={formData.first_name || ''}
                     onChange={handleInputChange}
                     disabled={!editMode}
+                    maxLength={20}
                     style={{
                       width: '100%',
                       padding: '10px 12px',
                       border: '1px solid #d1d5db',
                       borderRadius: '8px',
                       fontSize: '14px',
-                      background: editMode ? 'white' : '#f3f4f6'
+                      background: editMode ? 'white' : '#f3f4f6',
+                      boxSizing: 'border-box'
                     }}
                   />
                 </div>
@@ -431,17 +475,19 @@ const StudentProfile = () => {
                     value={formData.last_name || ''}
                     onChange={handleInputChange}
                     disabled={!editMode}
+                    maxLength={20}
                     style={{
                       width: '100%',
                       padding: '10px 12px',
                       border: '1px solid #d1d5db',
                       borderRadius: '8px',
                       fontSize: '14px',
-                      background: editMode ? 'white' : '#f3f4f6'
+                      background: editMode ? 'white' : '#f3f4f6',
+                      boxSizing: 'border-box'
                     }}
                   />
                 </div>
-                <div style={{ gridColumn: '1 / -1' }}>
+                <div style={{ gridColumn: isMobile ? 'auto' : '1 / -1' }}>
                   <label style={{ fontSize: '13px', fontWeight: '500', color: '#374151', display: 'block', marginBottom: '4px' }}>
                     Email
                   </label>
@@ -451,17 +497,19 @@ const StudentProfile = () => {
                     value={formData.email || ''}
                     onChange={handleInputChange}
                     disabled={!editMode}
+                    maxLength={30}
                     style={{
                       width: '100%',
                       padding: '10px 12px',
                       border: '1px solid #d1d5db',
                       borderRadius: '8px',
                       fontSize: '14px',
-                      background: editMode ? 'white' : '#f3f4f6'
+                      background: editMode ? 'white' : '#f3f4f6',
+                      boxSizing: 'border-box'
                     }}
                   />
                 </div>
-                <div style={{ gridColumn: '1 / -1' }}>
+                <div style={{ gridColumn: isMobile ? 'auto' : '1 / -1' }}>
                   <label style={{ fontSize: '13px', fontWeight: '500', color: '#374151', display: 'block', marginBottom: '4px' }}>
                     Role
                   </label>
@@ -476,14 +524,20 @@ const StudentProfile = () => {
                       borderRadius: '8px',
                       fontSize: '14px',
                       background: '#f3f4f6',
-                      color: '#6b7280'
+                      color: '#6b7280',
+                      boxSizing: 'border-box'
                     }}
                   />
                 </div>
               </div>
 
               {editMode && (
-                <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+                <div style={{
+                  display: 'flex',
+                  flexDirection: isMobile ? 'column' : 'row',
+                  gap: '12px',
+                  marginTop: '24px'
+                }}>
                   <button
                     type="submit"
                     disabled={updating}
@@ -492,10 +546,11 @@ const StudentProfile = () => {
                       background: updating ? '#93c5fd' : '#10b981',
                       color: 'white',
                       border: 'none',
-                      padding: '10px',
+                      padding: '12px',
                       borderRadius: '8px',
                       fontWeight: '600',
-                      cursor: updating ? 'not-allowed' : 'pointer'
+                      cursor: updating ? 'not-allowed' : 'pointer',
+                      fontSize: '14px'
                     }}
                   >
                     {updating ? 'Saving...' : '💾 Save Changes'}
@@ -508,10 +563,11 @@ const StudentProfile = () => {
                       background: 'transparent',
                       color: '#6b7280',
                       border: '1px solid #d1d5db',
-                      padding: '10px',
+                      padding: '12px',
                       borderRadius: '8px',
                       fontWeight: '600',
-                      cursor: 'pointer'
+                      cursor: 'pointer',
+                      fontSize: '14px'
                     }}
                   >
                     Cancel
@@ -540,7 +596,8 @@ const StudentProfile = () => {
                   marginBottom: '16px',
                   background: passwordMessageType === 'success' ? '#d1fae5' : '#fee2e2',
                   color: passwordMessageType === 'success' ? '#065f46' : '#991b1b',
-                  border: `1px solid ${passwordMessageType === 'success' ? '#34d399' : '#fca5a5'}`
+                  border: `1px solid ${passwordMessageType === 'success' ? '#34d399' : '#fca5a5'}`,
+                  fontSize: '14px'
                 }}>
                   {passwordMessage}
                 </div>
@@ -569,8 +626,9 @@ const StudentProfile = () => {
                       padding: '10px 14px',
                       border: '1px solid #d1d5db',
                       borderRadius: '8px',
-                      fontSize: '14px',
-                      outline: 'none'
+                      fontSize: '16px',
+                      outline: 'none',
+                      boxSizing: 'border-box'
                     }}
                     onFocus={(e) => e.target.style.borderColor = '#1a56db'}
                     onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
@@ -599,8 +657,9 @@ const StudentProfile = () => {
                       padding: '10px 14px',
                       border: '1px solid #d1d5db',
                       borderRadius: '8px',
-                      fontSize: '14px',
-                      outline: 'none'
+                      fontSize: '16px',
+                      outline: 'none',
+                      boxSizing: 'border-box'
                     }}
                     onFocus={(e) => e.target.style.borderColor = '#1a56db'}
                     onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
@@ -629,8 +688,9 @@ const StudentProfile = () => {
                       padding: '10px 14px',
                       border: '1px solid #d1d5db',
                       borderRadius: '8px',
-                      fontSize: '14px',
-                      outline: 'none'
+                      fontSize: '16px',
+                      outline: 'none',
+                      boxSizing: 'border-box'
                     }}
                     onFocus={(e) => e.target.style.borderColor = '#1a56db'}
                     onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
@@ -645,7 +705,7 @@ const StudentProfile = () => {
                     background: passwordUpdating ? '#93c5fd' : '#1a56db',
                     color: 'white',
                     border: 'none',
-                    padding: '10px',
+                    padding: '12px',
                     borderRadius: '8px',
                     fontWeight: '600',
                     fontSize: '14px',

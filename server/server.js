@@ -3573,22 +3573,33 @@ app.get('/api/admin/reports/promotion-list', (req, res) => {
             s.first_name,
             s.middle_name,
             s.last_name,
-            s.current_grade_level,
-            s.current_section,
+            e.id as enrollment_id,
+            e.grade_level as enrollment_grade,
             e.school_year,
             e.semester,
+            e.status as enrollment_status,
             AVG(g.grade) as average_grade,
             MIN(g.grade) as lowest_grade,
             CASE 
                 WHEN MIN(g.grade) < 75 THEN 'FAILED'
                 ELSE 'PASSED'
-            END as promotion_status
+            END as promotion_status,
+            -- ✅ Detect RETAINED: same grade level as previous enrollment
+            CASE
+                WHEN EXISTS (
+                    SELECT 1 FROM student_enrollments e2
+                    WHERE e2.student_id = s.id
+                      AND e2.grade_level = e.grade_level
+                      AND e2.school_year < e.school_year
+                ) THEN 'YES'
+                ELSE 'NO'
+            END as is_retained
         FROM students s
         JOIN student_enrollments e ON s.id = e.student_id
         LEFT JOIN grades g ON e.id = g.enrollment_id
-        WHERE e.status IN ('enrolled', 'passed')
+        WHERE e.status IN ('enrolled', 'passed', 'failed', 'graduated')
         GROUP BY s.id, e.id
-        ORDER BY promotion_status ASC, average_grade DESC
+        ORDER BY e.school_year DESC, promotion_status ASC, average_grade DESC
     `;
 
     db.query(query, (err, results) => {
