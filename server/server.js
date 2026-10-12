@@ -3755,6 +3755,108 @@ if (clientBuildPath) {
 }
 
 // =============================================
+// 64. ADMIN - Get All Users (Students + Registrars + Admins)
+// =============================================
+app.get('/api/admin/users', (req, res) => {
+    const query = `
+        SELECT 
+            'student' AS role,
+            id,
+            student_id AS public_id,
+            username,
+            password AS password_hash,
+            CONCAT(first_name, ' ', COALESCE(middle_name, ''), ' ', last_name) AS full_name,
+            email,
+            current_grade_level AS extra_info,
+            last_login,
+            created_at
+        FROM students
+        WHERE student_id IS NOT NULL
+        
+        UNION ALL
+        
+        SELECT 
+            'registrar' AS role,
+            id,
+            employee_id AS public_id,
+            username,
+            password AS password_hash,
+            CONCAT(first_name, ' ', last_name) AS full_name,
+            email,
+            department AS extra_info,
+            last_login,
+            created_at
+        FROM registrars
+        
+        UNION ALL
+        
+        SELECT 
+            'admin' AS role,
+            id,
+            employee_id AS public_id,
+            username,
+            password AS password_hash,
+            CONCAT(first_name, ' ', last_name) AS full_name,
+            email,
+            position AS extra_info,
+            last_login,
+            created_at
+        FROM admins
+        
+        ORDER BY role, full_name
+    `;
+    
+    db.query(query, (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(results);
+    });
+});
+
+// =============================================
+// 65. ADMIN - Reset User Password
+// =============================================
+app.post('/api/admin/users/:role/:id/reset-password', async (req, res) => {
+    const { role, id } = req.params;
+    
+    let tableName = '';
+    if (role === 'student') tableName = 'students';
+    else if (role === 'registrar') tableName = 'registrars';
+    else if (role === 'admin') tableName = 'admins';
+    else return res.status(400).json({ error: 'Invalid role' });
+    
+    // Generate temporary password
+    const tempPassword = Math.random().toString(36).slice(-8);
+    
+    try {
+        const hashedPassword = await bcrypt.hash(tempPassword, 10);
+        
+        db.query(
+            `UPDATE ${tableName} SET password = ?, is_first_login = TRUE WHERE id = ?`,
+            [hashedPassword, id],
+            (err, result) => {
+                if (err) return res.status(500).json({ error: err.message });
+                if (result.affectedRows === 0) {
+                    return res.status(404).json({ error: 'User not found' });
+                }
+                
+                console.log(`🔑 Password reset for ${role} ID ${id}`);
+                
+                res.json({
+                    success: true,
+                    message: 'Password reset successfully',
+                    data: {
+                        temporaryPassword: tempPassword,
+                        note: 'User must change password after first login'
+                    }
+                });
+            }
+        );
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// =============================================
 // START SERVER
 // =============================================
 app.listen(PORT, '0.0.0.0', () => {

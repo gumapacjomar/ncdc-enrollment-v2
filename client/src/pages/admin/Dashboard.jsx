@@ -215,6 +215,7 @@ const AdminDashboard = () => {
 
   // ✅ UPDATED MENU ITEMS — Added Student Monitoring, Grade Reports, Student History
   const menuItems = [
+    { id: 'user-management', icon: '👥', label: 'User Management', path: '/admin/user-management', color: '#8b5cf6' },
     { id: 'dashboard', icon: '📊', label: 'Dashboard', path: '/admin/dashboard', color: '#3b82f6' },
     { id: 'applications', icon: '📋', label: 'Applications', path: '/admin/applications', color: '#8b5cf6' },
     { id: 'approved', icon: '✅', label: 'Confirm Enrollments', path: '/admin/approved', color: '#10b981' },

@@ -729,9 +729,22 @@ const HomePage = () => {
             <Link to="/login" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: '13px', padding: '4px' }}>Login</Link>
             <Link to="/apply" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: '13px', padding: '4px' }}>Apply</Link>
           </div>
-          <p style={{ fontSize: isMobile ? '12px' : '14px', margin: 0 }}>
-            © 2026 <strong style={{ color: 'white' }}>NCDC</strong> — National Children Development Center. All rights reserved.
-          </p>
+
+          {/* ✅ Copyright + Developer Credit */}
+          <div style={{
+            borderTop: '1px solid rgba(255,255,255,0.1)',
+            paddingTop: '16px',
+            fontSize: isMobile ? '12px' : '13px',
+            color: 'rgba(255,255,255,0.6)',
+            lineHeight: 1.8
+          }}>
+            <p style={{ margin: '0 0 4px' }}>
+              © 2026 <strong style={{ color: 'white' }}>NCDC</strong> — National Children Development Center. All rights reserved.
+            </p>
+            <p style={{ margin: 0, fontSize: isMobile ? '11px' : '12px' }}>
+              Developed by <strong style={{ color: '#fcd34d' }}>Jomar Gumapac</strong>
+            </p>
+          </div>
         </div>
       </footer>
     </div>

@@ -385,6 +385,7 @@ const RegistrarDashboard = () => {
 
   const menuItems = [
     { id: 'applications', icon: '📋', label: 'Applications', type: 'internal' },
+    { id: 'student-status', icon: '🎯', label: 'Student Status', type: 'link', path: '/registrar/student-status' },
     { id: 'enrolled', icon: '🎓', label: 'Enrolled Students', type: 'internal' },
     { id: 'sections', icon: '🏫', label: 'Sections', type: 'link', path: '/registrar/sections' },
     { id: 'subjects', icon: '📚', label: 'Subjects', type: 'link', path: '/registrar/subjects' },

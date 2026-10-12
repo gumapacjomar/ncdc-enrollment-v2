@@ -26,6 +26,8 @@ import GradeReports from './pages/admin/GradeReports';
 import StudentHistory from './pages/admin/StudentHistory';
 import AdminHonorStudents from './pages/admin/HonorStudents';
 import RegistrarHonorStudents from './pages/registrar/HonorStudents';
+import UserManagement from './pages/admin/UserManagement';
+import StudentStatus from './pages/registrar/StudentStatus.jsx';
 
 function App() {
   return (
@@ -47,6 +49,7 @@ function App() {
         <Route path="/registrar/remarks" element={<RegistrarRemarks />} />
         <Route path="/registrar/honor-students" element={<RegistrarHonorStudents />} />
         <Route path="/registrar/student-history" element={<StudentHistory />} />
+        <Route path="/registrar/student-status" element={<StudentStatus />} />
         
         {/* Admin Routes */}
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
@@ -61,6 +64,7 @@ function App() {
         <Route path="/admin/honor-students" element={<AdminHonorStudents />} />
         <Route path="/admin/student-history" element={<StudentHistory />} />
         <Route path="/admin/profile" element={<AdminProfile />} />
+        <Route path="/admin/user-management" element={<UserManagement />} />
         
         {/* Student Routes */}
         <Route path="/student/dashboard" element={<StudentDashboard />} />
