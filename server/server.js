@@ -2872,6 +2872,128 @@ app.post('/api/admin/graduate-student/:studentId', (req, res) => {
 });
 
 // =============================================
+// 48c-2. REGISTRAR - Graduate Student (Grade 6 only)
+// =============================================
+app.post('/api/registrar/graduate-student/:studentId', (req, res) => {
+    const { studentId } = req.params;
+    const { registrarId, remarks } = req.body;
+
+    const studentQuery = `
+        SELECT s.id, s.student_id, s.first_name, s.last_name, s.current_grade_level, s.enrollment_status
+        FROM students s
+        WHERE s.id = ?
+    `;
+
+    db.query(studentQuery, [studentId], (err, studentResults) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (studentResults.length === 0) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+
+        const student = studentResults[0];
+
+        if (student.current_grade_level !== 'Grade 6') {
+            return res.status(400).json({ 
+                error: `Dili pwede i-graduate ang ${student.current_grade_level} student. Grade 6 lang ang ma-graduate.` 
+            });
+        }
+
+        const enrollQuery = `
+            SELECT id, grade_level, school_year, status
+            FROM student_enrollments
+            WHERE student_id = ? AND grade_level = 'Grade 6'
+            ORDER BY school_year DESC
+            LIMIT 1
+        `;
+
+        db.query(enrollQuery, [studentId], (err, enrollResults) => {
+            if (err) return res.status(500).json({ error: err.message });
+            
+            if (enrollResults.length === 0) {
+                return res.status(400).json({ error: 'Walay Grade 6 enrollment record ang student.' });
+            }
+
+            const enrollment = enrollResults[0];
+
+            if (enrollment.status !== 'passed' && enrollment.status !== 'enrolled') {
+                return res.status(400).json({ 
+                    error: `Dili pa pwede i-graduate. Grade 6 status: ${enrollment.status}. Kinahanglan 'passed' o 'enrolled' una.` 
+                });
+            }
+
+            const gradesQuery = `
+                SELECT AVG(grade) as average, MIN(grade) as lowest, COUNT(*) as total
+                FROM grades
+                WHERE enrollment_id = ?
+            `;
+
+            db.query(gradesQuery, [enrollment.id], (err, gradeResults) => {
+                if (err) return res.status(500).json({ error: err.message });
+
+                const average = parseFloat(gradeResults[0].average || 0);
+                const lowest = parseFloat(gradeResults[0].lowest || 0);
+                const totalSubjects = gradeResults[0].total || 0;
+
+                if (totalSubjects === 0) {
+                    return res.status(400).json({ error: 'Walay grades record. Kinahanglan naay grades una.' });
+                }
+
+                if (average < 75 || lowest < 75) {
+                    return res.status(400).json({ 
+                        error: `Average: ${average.toFixed(2)}, Lowest: ${lowest.toFixed(2)}. Dili pwede i-graduate kung naay below 75.` 
+                    });
+                }
+
+                const updateQuery = `
+                    UPDATE students 
+                    SET enrollment_status = 'graduated',
+                        date_enrolled = COALESCE(date_enrolled, NOW())
+                    WHERE id = ?
+                `;
+
+                db.query(updateQuery, [studentId], (err) => {
+                    if (err) return res.status(500).json({ error: err.message });
+
+                    db.query(
+                        `UPDATE student_enrollments SET status = 'graduated', completed_at = NOW() WHERE id = ?`,
+                        [enrollment.id],
+                        (err) => {
+                            if (err) console.error('Enrollment update error:', err);
+                        }
+                    );
+
+                    if (registrarId) {
+                        db.query(
+                            `INSERT INTO student_remarks 
+                             (student_id, enrollment_id, remark_type, remark, created_by, created_by_role)
+                             VALUES (?, ?, 'achievement', ?, ?, 'registrar')`,
+                            [studentId, enrollment.id, `🎓 Graduated — Average: ${average.toFixed(2)}${remarks ? `. ${remarks}` : ''}`, registrarId],
+                            (err) => {
+                                if (err) console.error('Remark insert error:', err);
+                            }
+                        );
+                    }
+
+                    console.log(`🎓 Student graduated (registrar): ${student.first_name} ${student.last_name} (${student.student_id})`);
+
+                    res.json({
+                        success: true,
+                        message: `🎓 ${student.first_name} ${student.last_name} graduated successfully!`,
+                        data: {
+                            studentId: student.student_id,
+                            name: `${student.first_name} ${student.last_name}`,
+                            average: average.toFixed(2),
+                            lowest: lowest.toFixed(2),
+                            totalSubjects: totalSubjects
+                        }
+                    });
+                });
+            });
+        });
+    });
+});
+
+// =============================================
 // 48d. RE-ENROLLMENT - Student Apply (Promote OR Retain)
 // =============================================
 const OLD_QUARTERS_RE = ['1st Quarter', '2nd Quarter', '3rd Quarter', '4th Quarter'];
@@ -3854,6 +3976,89 @@ app.post('/api/admin/users/:role/:id/reset-password', async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
+});
+
+// =============================================
+// 66. GET - Graduation Candidates (Grade 6 Passed/Enrolled)
+// =============================================
+app.get('/api/registrar/graduation-candidates', (req, res) => {
+    const query = `
+        SELECT 
+            s.id AS student_id,
+            s.student_id AS public_id,
+            s.first_name,
+            s.middle_name,
+            s.last_name,
+            s.current_grade_level,
+            s.enrollment_status,
+            e.id AS enrollment_id,
+            e.grade_level,
+            e.school_year,
+            e.status AS enrollment_status,
+            e.completed_at,
+            (SELECT COUNT(*) FROM grades g WHERE g.enrollment_id = e.id) AS grade_count,
+            (SELECT MIN(g.grade) FROM grades g WHERE g.enrollment_id = e.id) AS lowest_grade,
+            (SELECT AVG(g.grade) FROM grades g WHERE g.enrollment_id = e.id) AS average_grade,
+            (SELECT COUNT(DISTINCT g.subject) FROM grades g WHERE g.enrollment_id = e.id) AS subject_count
+        FROM students s
+        JOIN student_enrollments e ON s.id = e.student_id
+        WHERE e.grade_level = 'Grade 6'
+          AND e.status IN ('enrolled', 'passed', 'graduated')
+        ORDER BY e.status DESC, s.last_name, s.first_name
+    `;
+
+    db.query(query, (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(results);
+    });
+});
+
+// =============================================
+// 67. GET - All Graduates (Grouped by Batch)
+// =============================================
+app.get('/api/admin/graduates', (req, res) => {
+    const query = `
+        SELECT 
+            s.id AS student_id,
+            s.student_id AS public_id,
+            s.first_name,
+            s.middle_name,
+            s.last_name,
+            s.current_grade_level,
+            s.enrollment_status,
+            e.id AS enrollment_id,
+            e.grade_level,
+            e.school_year,
+            e.status AS enrollment_status,
+            e.completed_at,
+            (SELECT AVG(g.grade) FROM grades g WHERE g.enrollment_id = e.id) AS average_grade,
+            (SELECT MIN(g.grade) FROM grades g WHERE g.enrollment_id = e.id) AS lowest_grade
+        FROM students s
+        JOIN student_enrollments e ON s.id = e.student_id
+        WHERE e.grade_level = 'Grade 6'
+          AND e.status = 'graduated'
+        ORDER BY e.school_year DESC, s.last_name, s.first_name
+    `;
+    
+    db.query(query, (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        
+        // Group by school_year
+        const grouped = {};
+        results.forEach(student => {
+            const sy = student.school_year;
+            if (!grouped[sy]) grouped[sy] = [];
+            grouped[sy].push(student);
+        });
+        
+        res.json({
+            success: true,
+            data: results,
+            grouped: grouped,
+            totalBatches: Object.keys(grouped).length,
+            totalGraduates: results.length
+        });
+    });
 });
 
 // =============================================

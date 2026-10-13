@@ -21,8 +21,8 @@ const Reports = () => {
   });
   const [monthlyData, setMonthlyData] = useState([]);
   const [filterStatus, setFilterStatus] = useState('all');
-  const [filterSY, setFilterSY] = useState('all'); // ✅ NEW: SY filter
-  const [availableEnrollmentSYs, setAvailableEnrollmentSYs] = useState([]); // ✅ NEW
+  const [filterSY, setFilterSY] = useState('all');
+  const [availableEnrollmentSYs, setAvailableEnrollmentSYs] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
 
   // ── Academic Reports State ──
@@ -43,6 +43,16 @@ const Reports = () => {
   const [failingStudentsList, setFailingStudentsList] = useState([]);
   const [gradeDistribution, setGradeDistribution] = useState([]);
 
+  // ── Graduates by Batch State ──
+  const [graduatesData, setGraduatesData] = useState([]);
+  const [graduatesGrouped, setGraduatesGrouped] = useState({});
+  const [graduatesLoading, setGraduatesLoading] = useState(false);
+  const [selectedBatch, setSelectedBatch] = useState('');
+  const [graduatesStats, setGraduatesStats] = useState({
+    totalGraduates: 0,
+    totalBatches: 0
+  });
+
   const gradeLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
 
   useEffect(() => {
@@ -53,6 +63,7 @@ const Reports = () => {
     }
     fetchEnrollmentData();
     fetchAcademicData();
+    fetchGraduatesData();
     // eslint-disable-next-line
   }, [navigate]);
 
@@ -72,7 +83,6 @@ const Reports = () => {
         });
         setMonthlyData(response.data.monthlyData || []);
 
-        // ✅ Collect unique academic years from applications
         const sySet = new Set();
         apps.forEach(app => {
           if (app.academic_year) sySet.add(app.academic_year);
@@ -99,19 +109,16 @@ const Reports = () => {
       const enrollRes = await API.get('/registrar/enrollments');
       const allEnrollments = Array.isArray(enrollRes.data) ? enrollRes.data : [];
 
-      // ✅ Include 'failed' status para maapil ang retained students
       const validStatuses = ['passed', 'enrolled', 'graduated', 'failed'];
       const validEnrollments = allEnrollments.filter(e =>
         validStatuses.includes(e.status)
       );
 
-      // Collect SYs
       const sySet = new Set();
       validEnrollments.forEach(e => e.school_year && sySet.add(e.school_year));
       const syList = Array.from(sySet).sort((a, b) => b.localeCompare(a));
       setAvailableSYs(syList);
 
-      // Pick target SY
       let targetSY = overrideSY;
       if (!targetSY) {
         const passedSYs = validEnrollments
@@ -134,10 +141,8 @@ const Reports = () => {
         return;
       }
 
-      // Filter enrollments for target SY
       const syEnrollments = validEnrollments.filter(e => e.school_year === targetSY);
 
-      // Unique students
       const uniqueStudents = {};
       syEnrollments.forEach(e => {
         if (!uniqueStudents[e.student_id]) {
@@ -156,7 +161,6 @@ const Reports = () => {
         }
       });
 
-      // Compute stats per student
       const honors = [];
       const failing = [];
       const promoted = [];
@@ -177,22 +181,18 @@ const Reports = () => {
           );
           const grades = Array.isArray(gradesRes.data) ? gradesRes.data : [];
 
-          // Grade distribution (total per grade level)
           if (gradeDist[student.grade_level]) {
             gradeDist[student.grade_level].total++;
           }
 
           if (grades.length === 0) continue;
 
-          // Compute honor
           const honor = computeHonorFromGrades(grades);
           const subjects = honor.subjects || [];
 
-          // ✅ Detect failing subjects (any term < 75)
           const failingSubjects = detectFailingSubjects(grades);
           const hasFailing = failingSubjects.length > 0;
 
-          // ── Update stats ──
           if (honor.isHonor) {
             honors.push({
               ...student,
@@ -223,16 +223,13 @@ const Reports = () => {
         }
       }
 
-      // Sort honors by tier + average
       honors.sort((a, b) => {
         if (a.tier.rank !== b.tier.rank) return a.tier.rank - b.tier.rank;
         return b.average - a.average;
       });
 
-      // Sort failing by average ascending (worst first)
       failing.sort((a, b) => (a.average || 0) - (b.average || 0));
 
-      // Build grade distribution array
       const gradeDistArray = gradeLevels.map(g => ({
         grade_level: g,
         ...gradeDist[g]
@@ -259,7 +256,6 @@ const Reports = () => {
     }
   };
 
-  // ✅ Detect failing subjects — ANY term < 75
   const detectFailingSubjects = (grades) => {
     const bySubject = {};
     grades.forEach(g => {
@@ -290,6 +286,61 @@ const Reports = () => {
   };
 
   // ══════════════════════════════════════════════════════════
+  // GRADUATES DATA
+  // ══════════════════════════════════════════════════════════
+  const fetchGraduatesData = async () => {
+    setGraduatesLoading(true);
+    try {
+      const res = await API.get('/admin/graduates');
+      
+      if (res.data.success) {
+        setGraduatesData(res.data.data || []);
+        setGraduatesGrouped(res.data.grouped || {});
+        setGraduatesStats({
+          totalGraduates: res.data.totalGraduates || 0,
+          totalBatches: res.data.totalBatches || 0
+        });
+        
+        const batches = Object.keys(res.data.grouped || {}).sort((a, b) => b.localeCompare(a));
+        if (batches.length > 0 && !selectedBatch) {
+          setSelectedBatch(batches[0]);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching graduates:', error);
+    } finally {
+      setGraduatesLoading(false);
+    }
+  };
+
+  // ✅ NEW: Honor badge helper for graduates
+  const getHonorBadge = (average, lowest) => {
+    const avg = parseFloat(average || 0);
+    const low = parseFloat(lowest || 0);
+
+    if (avg >= 98 && low >= 90) {
+      return { label: '🏆 Highest Honors', bg: '#fef3c7', color: '#92400e' };
+    }
+    if (avg >= 95 && low >= 90) {
+      return { label: '🥇 High Honors', bg: '#dbeafe', color: '#1e40af' };
+    }
+    if (avg >= 90 && low >= 85) {
+      return { label: '🥈 With Honors', bg: '#f3e8ff', color: '#6d28d9' };
+    }
+    return { label: '—', bg: '#f3f4f6', color: '#9ca3af' };
+  };
+
+  // ✅ NEW: Sorted graduates (highest average first) for selected batch
+  const getSortedBatch = (batchSY) => {
+    const list = graduatesGrouped[batchSY] || [];
+    return [...list].sort((a, b) => {
+      const avgA = parseFloat(a.average_grade || 0);
+      const avgB = parseFloat(b.average_grade || 0);
+      return avgB - avgA;
+    });
+  };
+
+  // ══════════════════════════════════════════════════════════
   // ENROLLMENT FILTERS
   // ══════════════════════════════════════════════════════════
   const filteredApplications = applications.filter(app => {
@@ -297,7 +348,6 @@ const Reports = () => {
     const matchesSearch = fullName.includes(searchTerm.toLowerCase()) ||
                           (app.email || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterStatus === 'all' || app.status === filterStatus;
-    // ✅ SY filter instead of date range
     const matchesSY = filterSY === 'all' || app.academic_year === filterSY;
 
     return matchesSearch && matchesFilter && matchesSY;
@@ -391,6 +441,43 @@ const Reports = () => {
     window.URL.revokeObjectURL(url);
   };
 
+  // ✅ Export Graduates to CSV (with Honor column)
+  const exportGraduatesToCSV = () => {
+    const currentList = getSortedBatch(selectedBatch);
+    if (currentList.length === 0) {
+      alert('Walay data sa current batch.');
+      return;
+    }
+
+    const lines = [];
+    lines.push(`Graduates Report — Batch ${selectedBatch}`);
+    lines.push(`Generated: ${new Date().toLocaleString()}`);
+    lines.push('');
+    lines.push('== GRADUATES ==');
+    lines.push('Student ID,Name,Grade,Average,Honor,Graduated On');
+
+    currentList.forEach(s => {
+      const honorBadge = getHonorBadge(s.average_grade, s.lowest_grade);
+      lines.push([
+        s.public_id || '',
+        `"${s.first_name} ${s.last_name}"`,
+        s.grade_level || '',
+        s.average_grade ? parseFloat(s.average_grade).toFixed(2) : '',
+        honorBadge.label,
+        s.completed_at ? new Date(s.completed_at).toLocaleDateString() : ''
+      ].join(','));
+    });
+
+    const csv = lines.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `graduates-batch-${selectedBatch}-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
   const printReport = () => window.print();
 
   const statusColors = {
@@ -471,7 +558,11 @@ const Reports = () => {
               }}
             >🖨️ Print</button>
             <button
-              onClick={activeTab === 'enrollment' ? exportEnrollmentToCSV : exportAcademicToCSV}
+              onClick={
+                activeTab === 'enrollment' ? exportEnrollmentToCSV :
+                activeTab === 'academic' ? exportAcademicToCSV :
+                exportGraduatesToCSV
+              }
               style={{
                 background: '#10b981', color: 'white', border: 'none',
                 padding: '10px 20px', borderRadius: '8px',
@@ -491,7 +582,8 @@ const Reports = () => {
           display: 'flex', gap: '4px', marginBottom: '24px',
           background: 'white', padding: '6px', borderRadius: '12px',
           boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-          width: 'fit-content'
+          width: 'fit-content',
+          flexWrap: 'wrap'
         }}>
           <button
             onClick={() => setActiveTab('enrollment')}
@@ -515,6 +607,17 @@ const Reports = () => {
               transition: 'all 0.2s'
             }}
           >🎓 Academic Reports</button>
+          <button
+            onClick={() => setActiveTab('graduates')}
+            style={{
+              padding: '10px 24px', borderRadius: '8px',
+              border: 'none', cursor: 'pointer',
+              fontSize: '14px', fontWeight: '600',
+              background: activeTab === 'graduates' ? 'linear-gradient(135deg, #7c3aed, #8b5cf6)' : 'transparent',
+              color: activeTab === 'graduates' ? 'white' : '#6b7280',
+              transition: 'all 0.2s'
+            }}
+          >🏆 Graduates by Batch</button>
         </div>
 
         {error && (
@@ -529,7 +632,6 @@ const Reports = () => {
         {/* ══════════════════════════════════════════════════════════ */}
         {activeTab === 'enrollment' && (
           <>
-            {/* Stats Cards */}
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
@@ -554,7 +656,6 @@ const Reports = () => {
               ))}
             </div>
 
-            {/* Monthly Chart */}
             {monthlyData.length > 0 && (
               <div style={{
                 background: 'white', padding: '20px', borderRadius: '12px',
@@ -594,7 +695,6 @@ const Reports = () => {
               </div>
             )}
 
-            {/* Filters */}
             <div style={{
               background: 'white', padding: '20px', borderRadius: '12px',
               marginBottom: '24px', border: '1px solid #e5e7eb'
@@ -624,7 +724,6 @@ const Reports = () => {
                   </select>
                 </div>
 
-                {/* ✅ REPLACED: School Year filter instead of Date From */}
                 <div>
                   <label style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>📅 School Year</label>
                   <select
@@ -659,7 +758,6 @@ const Reports = () => {
               </div>
             </div>
 
-            {/* Applications Table */}
             <div style={{
               background: 'white', padding: '20px', borderRadius: '12px',
               border: '1px solid #e5e7eb', boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
@@ -705,7 +803,6 @@ const Reports = () => {
                               {app.status ? app.status.charAt(0).toUpperCase() + app.status.slice(1) : 'N/A'}
                             </span>
                           </td>
-                          {/* ✅ NEW: School Year column */}
                           <td style={{ padding: '10px', fontSize: '13px', color: '#6b7280', fontWeight: '600' }}>
                             {app.academic_year || 'N/A'}
                           </td>
@@ -733,7 +830,6 @@ const Reports = () => {
         {/* ══════════════════════════════════════════════════════════ */}
         {activeTab === 'academic' && (
           <>
-            {/* SY Selector */}
             {availableSYs.length > 0 && (
               <div style={{
                 background: 'white', padding: '16px 20px', borderRadius: '12px',
@@ -763,7 +859,6 @@ const Reports = () => {
               </div>
             )}
 
-            {/* Academic Stats Cards */}
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
@@ -843,7 +938,6 @@ const Reports = () => {
               }}>⏳ Loading academic data...</div>
             ) : (
               <>
-                {/* Grade Distribution */}
                 {gradeDistribution.length > 0 && (
                   <div style={{
                     background: 'white', padding: '20px', borderRadius: '12px',
@@ -890,7 +984,6 @@ const Reports = () => {
                   </div>
                 )}
 
-                {/* Honor Students Table */}
                 <div style={{
                   background: 'white', padding: '20px', borderRadius: '12px',
                   marginBottom: '24px', border: '1px solid #e5e7eb'
@@ -953,7 +1046,6 @@ const Reports = () => {
                   )}
                 </div>
 
-                {/* Failing Students Table */}
                 <div style={{
                   background: 'white', padding: '20px', borderRadius: '12px',
                   border: '1px solid #e5e7eb'
@@ -1005,6 +1097,181 @@ const Reports = () => {
                   )}
                 </div>
               </>
+            )}
+          </>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════ */}
+        {/* TAB 3: GRADUATES BY BATCH */}
+        {/* ══════════════════════════════════════════════════════════ */}
+        {activeTab === 'graduates' && (
+          <>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '16px', marginBottom: '24px'
+            }}>
+              <div style={{
+                background: 'white', padding: '20px', borderRadius: '12px',
+                borderTop: '4px solid #7c3aed', boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+              }}>
+                <div style={{ fontSize: '32px', fontWeight: '800', color: '#7c3aed' }}>
+                  {graduatesStats.totalGraduates}
+                </div>
+                <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '600' }}>
+                  🏆 Total Graduates
+                </div>
+              </div>
+
+              <div style={{
+                background: 'white', padding: '20px', borderRadius: '12px',
+                borderTop: '4px solid #8b5cf6', boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+              }}>
+                <div style={{ fontSize: '32px', fontWeight: '800', color: '#8b5cf6' }}>
+                  {graduatesStats.totalBatches}
+                </div>
+                <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '600' }}>
+                  📅 Total Batches
+                </div>
+              </div>
+
+              <div style={{
+                background: 'white', padding: '20px', borderRadius: '12px',
+                borderTop: '4px solid #a855f7', boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+              }}>
+                <div style={{ fontSize: '32px', fontWeight: '800', color: '#a855f7' }}>
+                  {selectedBatch ? (graduatesGrouped[selectedBatch]?.length || 0) : 0}
+                </div>
+                <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '600' }}>
+                  🎓 Current Batch ({selectedBatch || '—'})
+                </div>
+              </div>
+            </div>
+
+            {Object.keys(graduatesGrouped).length > 0 && (
+              <div style={{
+                background: 'white', padding: '16px 20px', borderRadius: '12px',
+                marginBottom: '24px', border: '1px solid #e5e7eb',
+                display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center'
+              }}>
+                <label style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>
+                  📅 Select Batch (School Year):
+                </label>
+                <select
+                  value={selectedBatch}
+                  onChange={(e) => setSelectedBatch(e.target.value)}
+                  style={{
+                    padding: '10px 14px', borderRadius: '8px',
+                    border: '1px solid #d1d5db', fontSize: '14px',
+                    outline: 'none', minWidth: '180px',
+                    fontWeight: '600', color: '#1f2937',
+                    background: '#f9fafb', cursor: 'pointer'
+                  }}
+                >
+                  {Object.keys(graduatesGrouped)
+                    .sort((a, b) => b.localeCompare(a))
+                    .map(sy => (
+                      <option key={sy} value={sy}>
+                        {sy} ({graduatesGrouped[sy].length} graduates)
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
+
+            {graduatesLoading ? (
+              <div style={{
+                background: 'white', padding: '60px', borderRadius: '12px',
+                textAlign: 'center', color: '#6b7280'
+              }}>⏳ Loading graduates...</div>
+            ) : Object.keys(graduatesGrouped).length === 0 ? (
+              <div style={{
+                background: 'white', padding: '60px', borderRadius: '12px',
+                textAlign: 'center', color: '#6b7280', border: '1px solid #e5e7eb'
+              }}>
+                <div style={{ fontSize: '64px', marginBottom: '12px' }}>🎓</div>
+                <h3 style={{ color: '#1f2937', marginBottom: '8px' }}>No Graduates Yet</h3>
+                <p>Wala pay Grade 6 students nga na-mark as graduated.</p>
+              </div>
+            ) : (
+              <div style={{
+                background: 'white', padding: '24px', borderRadius: '14px',
+                border: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+              }}>
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between',
+                  alignItems: 'center', marginBottom: '16px'
+                }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#7c3aed', margin: 0 }}>
+                    🏆 Batch {selectedBatch} — Graduates
+                  </h3>
+                  <span style={{ fontSize: '13px', color: '#6b7280' }}>
+                    {graduatesGrouped[selectedBatch]?.length || 0} graduates
+                  </span>
+                </div>
+
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid #e5e7eb', background: '#f9fafb' }}>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>#</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Student ID</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Name</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Grade</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Average</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Honor</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Graduated On</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {getSortedBatch(selectedBatch).map((student, idx) => {
+                        const honorBadge = getHonorBadge(student.average_grade, student.lowest_grade);
+                        return (
+                          <tr key={student.student_id} style={{
+                            borderBottom: '1px solid #f3f4f6',
+                            background: idx % 2 === 0 ? 'transparent' : '#fafbfc'
+                          }}>
+                            <td style={{ padding: '12px 16px', fontSize: '13px', color: '#6b7280' }}>{idx + 1}</td>
+                            <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: '700', color: '#1a56db' }}>
+                              {student.public_id || '—'}
+                            </td>
+                            <td style={{ padding: '12px 16px', fontSize: '14px', color: '#1f2937', fontWeight: '600' }}>
+                              {student.first_name} {student.middle_name || ''} {student.last_name}
+                            </td>
+                            <td style={{ padding: '12px 16px', fontSize: '13px', color: '#6b7280' }}>
+                              {student.grade_level || '—'}
+                            </td>
+                            <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                              <span style={{
+                                padding: '4px 12px', borderRadius: '10px',
+                                fontSize: '13px', fontWeight: '700',
+                                background: '#e0e7ff', color: '#4338ca'
+                              }}>
+                                {student.average_grade ? parseFloat(student.average_grade).toFixed(2) : '—'}
+                              </span>
+                            </td>
+                            <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                              <span style={{
+                                padding: '4px 12px', borderRadius: '10px',
+                                fontSize: '12px', fontWeight: '700',
+                                background: honorBadge.bg, color: honorBadge.color,
+                                whiteSpace: 'nowrap'
+                              }}>
+                                {honorBadge.label}
+                              </span>
+                            </td>
+                            <td style={{ padding: '12px 16px', fontSize: '13px', color: '#6b7280' }}>
+                              {student.completed_at ? new Date(student.completed_at).toLocaleDateString('en-US', {
+                                month: 'short', day: 'numeric', year: 'numeric'
+                              }) : '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             )}
           </>
         )}
