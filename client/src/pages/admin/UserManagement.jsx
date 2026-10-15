@@ -11,6 +11,13 @@ const UserManagement = () => {
   const [filterRole, setFilterRole] = useState('all');
   const [profilePic, setProfilePic] = useState(null);
 
+  // ✅ Mobile detection
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  // ✅ View profile modal state
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [viewUser, setViewUser] = useState(null);
+
   // Reset password modal state
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetData, setResetData] = useState(null);
@@ -18,6 +25,12 @@ const UserManagement = () => {
   const [copied, setCopied] = useState(false);
 
   const user = JSON.parse(localStorage.getItem('user'));
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     if (!user || user.role !== 'admin') {
@@ -74,6 +87,20 @@ const UserManagement = () => {
     } finally {
       setResetLoading(false);
     }
+  };
+
+  // ✅ Handle View Profile
+  const handleViewProfile = (userItem) => {
+    setViewUser(userItem);
+    setShowViewModal(true);
+  };
+
+  // ✅ Handle Reset from View Modal
+  const handleResetFromView = () => {
+    const u = viewUser;
+    setShowViewModal(false);
+    setViewUser(null);
+    handleResetPassword(u);
   };
 
   const copyToClipboard = (text) => {
@@ -408,19 +435,19 @@ const UserManagement = () => {
                             month: 'short', day: 'numeric', year: 'numeric'
                           }) : 'Never'}
                         </td>
+                        {/* ✅ ACTION: View only — Reset is inside View modal */}
                         <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                           <button
-                            onClick={() => handleResetPassword(u)}
-                            disabled={resetLoading}
+                            onClick={() => handleViewProfile(u)}
                             style={{
-                              background: '#fee2e2', color: '#991b1b',
-                              border: 'none', padding: '6px 14px',
+                              background: '#dbeafe', color: '#1a56db',
+                              border: 'none', padding: '6px 18px',
                               borderRadius: '6px', fontSize: '12px',
-                              fontWeight: '600', cursor: resetLoading ? 'not-allowed' : 'pointer',
+                              fontWeight: '600', cursor: 'pointer',
                               whiteSpace: 'nowrap'
                             }}
                           >
-                            🔑 Reset
+                            👁️ View
                           </button>
                         </td>
                       </tr>
@@ -443,7 +470,7 @@ const UserManagement = () => {
           color: '#92400e'
         }}>
           <strong>ℹ️ Password Info:</strong> Passwords are bcrypt-hashed (one-way encryption) for security.
-          Dili ma-decode ang hash. Kung ang user nakalimot sa password, gamita ang <strong>"Reset Password"</strong> button — mo-generate og bag-ong temporary password.
+          Dili ma-decode ang hash. Kung ang user nakalimot sa password, i-click ang <strong>View</strong>, dayon gamita ang <strong>"Reset Password"</strong> button sa sulod.
         </div>
 
         <div style={{
@@ -456,17 +483,201 @@ const UserManagement = () => {
         </div>
       </div>
 
+      {/* ✅ VIEW PROFILE MODAL */}
+      {showViewModal && viewUser && (
+        <div
+          onClick={() => { setShowViewModal(false); setViewUser(null); }}
+          style={{
+            position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+            background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000, padding: isMobile ? '12px' : '20px'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'white', borderRadius: '16px',
+              maxWidth: '500px', width: '100%',
+              padding: isMobile ? '24px 20px' : '32px',
+              maxHeight: '90vh', overflowY: 'auto',
+              boxShadow: '0 25px 60px rgba(0,0,0,0.3)'
+            }}
+          >
+            {/* Header */}
+            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+              <div style={{
+                width: '80px', height: '80px', borderRadius: '50%',
+                background: 'linear-gradient(135deg, #dbeafe, #bfdbfe)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '32px', fontWeight: '800', color: '#1a56db',
+                margin: '0 auto 12px',
+                border: '3px solid white',
+                boxShadow: '0 4px 15px rgba(26,86,219,0.2)',
+                overflow: 'hidden'
+              }}>
+                {viewUser.profile_pic ? (
+                  <img
+                    src={`${UPLOADS_URL}/profiles/${viewUser.profile_pic}`}
+                    alt="Profile"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  viewUser.full_name?.charAt(0).toUpperCase() || '?'
+                )}
+              </div>
+              <h2 style={{ fontSize: isMobile ? '18px' : '20px', color: '#1f2937', margin: '0 0 6px', fontWeight: '700' }}>
+                {viewUser.full_name}
+              </h2>
+              <span style={{
+                display: 'inline-block',
+                padding: '4px 12px', borderRadius: '12px',
+                fontSize: '12px', fontWeight: '700',
+                background: getRoleBadge(viewUser.role).bg,
+                color: getRoleBadge(viewUser.role).color
+              }}>
+                {getRoleBadge(viewUser.role).label}
+              </span>
+            </div>
+
+            {/* Info Rows */}
+            <div style={{
+              background: '#f9fafb',
+              borderRadius: '12px',
+              padding: '16px',
+              marginBottom: '16px',
+              display: 'flex', flexDirection: 'column', gap: '12px'
+            }}>
+              <div>
+                <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Username
+                </div>
+                <div style={{
+                  fontSize: '14px', color: '#1f2937', fontFamily: 'monospace',
+                  fontWeight: '700', marginTop: '2px',
+                  padding: '6px 10px', background: 'white', borderRadius: '6px',
+                  wordBreak: 'break-all'
+                }}>
+                  {viewUser.username}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  ID
+                </div>
+                <div style={{
+                  fontSize: '14px', color: '#1a56db', fontWeight: '700',
+                  marginTop: '2px', fontFamily: 'monospace'
+                }}>
+                  {viewUser.public_id || '—'}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Last Login
+                </div>
+                <div style={{ fontSize: '14px', color: '#1f2937', fontWeight: '600', marginTop: '2px' }}>
+                  {viewUser.last_login
+                    ? new Date(viewUser.last_login).toLocaleString('en-US', {
+                        month: 'short', day: 'numeric', year: 'numeric',
+                        hour: '2-digit', minute: '2-digit'
+                      })
+                    : 'Never'}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Account Status
+                </div>
+                <div style={{ marginTop: '4px' }}>
+                  {viewUser.is_first_login === 1 ? (
+                    <span style={{
+                      display: 'inline-block', padding: '4px 12px',
+                      borderRadius: '12px', fontSize: '12px', fontWeight: '700',
+                      background: '#fef3c7', color: '#92400e'
+                    }}>
+                      ⚠️ First Login — must change password
+                    </span>
+                  ) : (
+                    <span style={{
+                      display: 'inline-block', padding: '4px 12px',
+                      borderRadius: '12px', fontSize: '12px', fontWeight: '700',
+                      background: '#d1fae5', color: '#065f46'
+                    }}>
+                      ✅ Active
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Password Info */}
+            <div style={{
+              background: '#fef3c7',
+              borderRadius: '8px',
+              padding: '12px 16px',
+              fontSize: '12px',
+              color: '#92400e',
+              marginBottom: '20px',
+              lineHeight: '1.5'
+            }}>
+              🔒 <strong>Password is bcrypt-hashed and cannot be viewed.</strong> Kung ang user nakalimot sa password, gamita ang <strong>"Reset Password"</strong> para makahimo og temporary password.
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{
+              display: 'flex', gap: '10px',
+              flexDirection: isMobile ? 'column' : 'row'
+            }}>
+              <button
+                onClick={handleResetFromView}
+                disabled={resetLoading}
+                style={{
+                  flex: 1,
+                  background: resetLoading ? '#fca5a5' : 'linear-gradient(135deg, #f59e0b, #fbbf24)',
+                  color: 'white', border: 'none',
+                  padding: '12px', borderRadius: '10px',
+                  fontSize: '14px', fontWeight: '700',
+                  cursor: resetLoading ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 4px 15px rgba(245,158,11,0.3)'
+                }}
+              >
+                🔑 Reset Password
+              </button>
+              <button
+                onClick={() => { setShowViewModal(false); setViewUser(null); }}
+                style={{
+                  flex: 1,
+                  background: '#f3f4f6',
+                  color: '#6b7280', border: '1px solid #d1d5db',
+                  padding: '12px', borderRadius: '10px',
+                  fontSize: '14px', fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* RESET PASSWORD MODAL */}
       {showResetModal && resetData && (
         <div style={{
           position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
           background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 1000, padding: '20px'
+          zIndex: 1000, padding: isMobile ? '12px' : '20px'
         }}>
           <div style={{
             background: 'white', borderRadius: '16px',
-            maxWidth: '500px', width: '100%', padding: '32px',
+            maxWidth: '500px', width: '100%',
+            padding: isMobile ? '24px 20px' : '32px',
+            maxHeight: '90vh', overflowY: 'auto',
             boxShadow: '0 25px 60px rgba(0,0,0,0.3)'
           }}>
             <div style={{ textAlign: 'center', marginBottom: '20px' }}>
@@ -507,7 +718,8 @@ const UserManagement = () => {
                   flex: 1, fontSize: '20px', fontWeight: '800', color: '#991b1b',
                   fontFamily: 'monospace', padding: '12px 16px',
                   background: 'white', borderRadius: '6px',
-                  border: '2px dashed #dc2626', letterSpacing: '2px'
+                  border: '2px dashed #dc2626', letterSpacing: '2px',
+                  wordBreak: 'break-all'
                 }}>
                   {resetData.temporaryPassword}
                 </div>
