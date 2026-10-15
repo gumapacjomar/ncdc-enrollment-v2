@@ -172,7 +172,7 @@ const generateStudentId = () => {
 
 // =============================================
 // ✅ FIELD LENGTH VALIDATION HELPER (Option C)
-// Names: 20 | Contact: 15 | Email: 30 | Address: 50 | Suffix: 10
+// Names: 20 | Contact: 15 | Email: 30 | Address: 15-30 | Suffix: 10
 // =============================================
 const FIELD_LIMITS = {
     firstName: { max: 20, label: 'First Name' },
@@ -181,7 +181,7 @@ const FIELD_LIMITS = {
     suffix: { max: 10, label: 'Suffix' },
     contactNumber: { max: 15, label: 'Contact Number' },
     email: { max: 30, label: 'Email' },
-    address: { max: 50, label: 'Address' },
+    address: { min: 15, max: 30, label: 'Address' },
     fatherName: { max: 20, label: 'Father Name' },
     motherName: { max: 20, label: 'Mother Name' },
     guardianName: { max: 20, label: 'Guardian Name' },
@@ -204,8 +204,14 @@ const FIELD_LIMITS = {
 const validateFieldLengths = (data) => {
     for (const [field, limits] of Object.entries(FIELD_LIMITS)) {
         const value = data[field];
-        if (value && typeof value === 'string' && value.trim().length > limits.max) {
-            return `${limits.label} is too long. Maximum ${limits.max} characters allowed (got ${value.trim().length}).`;
+        if (typeof value === 'string') {
+            const length = value.trim().length;
+            if (length > limits.max) {
+                return `${limits.label} is too long. Maximum ${limits.max} characters allowed (got ${length}).`;
+            }
+            if (limits.min !== undefined && length < limits.min) {
+                return `${limits.label} is too short. Minimum ${limits.min} characters required (got ${length}).`;
+            }
         }
     }
     return null;

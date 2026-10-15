@@ -1800,8 +1800,8 @@ const StudentDashboard = () => {
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px', marginTop: '4px', boxSizing: 'border-box' }} />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ fontSize: '13px', color: '#374151', fontWeight: '500' }}>Address <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 50)</small></label>
-              <textarea name="address" value={editData.address} onChange={handleEditChange} maxLength={50} rows="2"
+              <label style={{ fontSize: '13px', color: '#374151', fontWeight: '500' }}>Address <small style={{ color: '#9ca3af', fontWeight: '400' }}>(15-30 chars)</small></label>
+              <textarea name="address" value={editData.address} onChange={handleEditChange} minLength={15} maxLength={30} rows="2"
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px', marginTop: '4px', resize: 'vertical', boxSizing: 'border-box' }} />
             </div>
           </div>

@@ -368,8 +368,8 @@ const StudentApplication = () => {
               </div>
 
               <div style={{ gridColumn: isMobile ? 'auto' : '1 / -1' }}>
-                <label style={labelStyle}>Home Address * <small style={{ color: '#9ca3af', fontWeight: '400' }}>(max 50)</small></label>
-                <textarea name="address" value={formData.address} onChange={handleChange} required maxLength={50} rows="2" style={inputStyle} placeholder="Enter complete address" />
+                <label style={labelStyle}>Home Address * <small style={{ color: '#9ca3af', fontWeight: '400' }}>(15-30 chars)</small></label>
+                <textarea name="address" value={formData.address} onChange={handleChange} required minLength={15} maxLength={30} rows="2" style={inputStyle} placeholder="Enter complete address" />
               </div>
 
               <div style={{ gridColumn: isMobile ? 'auto' : '1 / -1' }}>
