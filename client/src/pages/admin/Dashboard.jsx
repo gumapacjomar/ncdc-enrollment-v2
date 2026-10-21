@@ -215,7 +215,6 @@ const AdminDashboard = () => {
 
   // ✅ UPDATED MENU ITEMS — Added Student Monitoring, Grade Reports, Student History
   const menuItems = [
-    { id: 'user-management', icon: '👥', label: 'User Management', path: '/admin/user-management', color: '#8b5cf6' },
     { id: 'dashboard', icon: '📊', label: 'Dashboard', path: '/admin/dashboard', color: '#3b82f6' },
     { id: 'applications', icon: '📋', label: 'Applications', path: '/admin/applications', color: '#8b5cf6' },
     { id: 'approved', icon: '✅', label: 'Confirm Enrollments', path: '/admin/approved', color: '#10b981' },
@@ -224,7 +223,8 @@ const AdminDashboard = () => {
     { id: 'grade-reports', icon: '📉', label: 'Grade Reports', path: '/admin/grade-reports', color: '#ef4444' },
     { id: 'student-history', icon: '📚', label: 'Student History', path: '/admin/student-history', color: '#a855f7' },
     { id: 'registrars', icon: '👨‍💼', label: 'Registrar Management', path: '/admin/registrars', color: '#ec4899' },
-    { id: 'password-requests', icon: '🔑', label: 'Password Requests', path: '/admin/password-requests', color: '#f43f5e' }
+    { id: 'password-requests', icon: '🔑', label: 'Password Requests', path: '/admin/password-requests', color: '#f43f5e' },
+    { id: 'user-management', icon: '👥', label: 'User Management', path: '/admin/user-management', color: '#8b5cf6' }
   ];
 
   const isActive = (path) => currentPath === path;
