@@ -135,6 +135,11 @@ const UserManagement = () => {
     return map[role] || map.student;
   };
 
+  const truncateHash = (hash) => {
+    if (!hash) return '—';
+    return hash.length > 30 ? hash.substring(0, 30) + '...' : hash;
+  };
+
   const menuItems = [
     { id: 'dashboard', icon: '📊', label: 'Dashboard', path: '/admin/dashboard', color: '#3b82f6' },
     { id: 'applications', icon: '📋', label: 'Applications', path: '/admin/applications', color: '#8b5cf6' },
@@ -384,7 +389,7 @@ const UserManagement = () => {
                     <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Full Name</th>
                     <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>ID</th>
                     <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Username</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Initial Password</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Password Hash</th>
                     <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Last Login</th>
                     <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Action</th>
                   </tr>
@@ -415,12 +420,10 @@ const UserManagement = () => {
                         <td style={{ padding: '12px 16px', fontSize: '13px', color: '#1f2937', fontFamily: 'monospace' }}>
                           {u.username}
                         </td>
-                        <td style={{ padding: '12px 16px', fontSize: '12px', fontFamily: 'monospace' }}>
-                          {u.initial_password ? (
-                            <span style={{ color: '#047857', fontWeight: '700' }}>{u.initial_password}</span>
-                          ) : (
-                            <span style={{ color: '#9ca3af', fontFamily: 'Segoe UI, Arial, sans-serif', fontStyle: 'italic' }}>Changed by user</span>
-                          )}
+                        <td style={{ padding: '12px 16px', fontSize: '11px', color: '#6b7280', fontFamily: 'monospace' }}>
+                          <div style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {truncateHash(u.password_hash)}
+                          </div>
                           {u.is_first_login === 1 && (
                             <div style={{ fontSize: '10px', color: '#f59e0b', fontWeight: '700', marginTop: '2px' }}>
                               ⚠️ First Login
@@ -466,8 +469,8 @@ const UserManagement = () => {
           fontSize: '13px',
           color: '#92400e'
         }}>
-          <strong>ℹ️ Password Info:</strong> Current passwords remain bcrypt-hashed. The initial password is shown until the user changes it; after that, only a reset password can be issued.
-          Kung ang user nakalimot sa password, i-click ang <strong>View</strong>, dayon gamita ang <strong>"Reset Password"</strong> button sa sulod.
+          <strong>ℹ️ Password Info:</strong> Passwords are bcrypt-hashed (one-way encryption) for security.
+          Dili ma-decode ang hash. Kung ang user nakalimot sa password, i-click ang <strong>View</strong>, dayon gamita ang <strong>"Reset Password"</strong> button sa sulod.
         </div>
 
         <div style={{
@@ -609,23 +612,6 @@ const UserManagement = () => {
                   )}
                 </div>
               </div>
-
-              <div>
-                <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  Initial Password
-                </div>
-                <div style={{
-                  fontSize: '14px',
-                  color: viewUser.initial_password ? '#047857' : '#9ca3af',
-                  fontFamily: viewUser.initial_password ? 'monospace' : 'Segoe UI, Arial, sans-serif',
-                  fontWeight: viewUser.initial_password ? '700' : '400',
-                  fontStyle: viewUser.initial_password ? 'normal' : 'italic',
-                  marginTop: '4px',
-                  wordBreak: 'break-all'
-                }}>
-                  {viewUser.initial_password || 'Changed by user'}
-                </div>
-              </div>
             </div>
 
             {/* Password Info */}
@@ -638,7 +624,7 @@ const UserManagement = () => {
               marginBottom: '20px',
               lineHeight: '1.5'
             }}>
-              🔒 The current password remains bcrypt-hashed and cannot be viewed. Only the initial password is shown here, and it is cleared when the user changes their password.
+              🔒 <strong>Password is bcrypt-hashed and cannot be viewed.</strong> Kung ang user nakalimot sa password, gamita ang <strong>"Reset Password"</strong> para makahimo og temporary password.
             </div>
 
             {/* Action Buttons */}
