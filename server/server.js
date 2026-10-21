@@ -297,19 +297,19 @@ app.post('/api/apply', upload.fields([
                     INSERT INTO students (
                         first_name, middle_name, last_name, suffix,
                         birth_date, gender, address, contact_number, email,
-                        username, password,
+                        username, password, initial_password,
                         father_name, father_occupation, father_contact,
                         mother_name, mother_occupation, mother_contact,
                         guardian_name, guardian_contact,
                         current_grade_level,
                         is_first_login
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `;
 
                 const studentValues = [
                     firstName, middleName || null, lastName, suffix || null,
                     birthDate, gender, address, contactNumber || null, email,
-                    username, hashedPassword,
+                    username, hashedPassword, defaultPassword,
                     fatherName || null, fatherOccupation || null, fatherContact || null,
                     motherName || null, motherOccupation || null, motherContact || null,
                     guardianName || null, guardianContact || null,
@@ -437,19 +437,19 @@ app.post('/api/registrar/apply-walkin', upload.fields([
                     INSERT INTO students (
                         first_name, middle_name, last_name, suffix,
                         birth_date, gender, address, contact_number, email,
-                        username, password,
+                        username, password, initial_password,
                         father_name, father_occupation, father_contact,
                         mother_name, mother_occupation, mother_contact,
                         guardian_name, guardian_contact,
                         current_grade_level,
                         is_first_login
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `;
 
                 const studentValues = [
                     firstName, middleName || null, lastName, suffix || null,
                     birthDate, gender, address, contactNumber || null, email,
-                    username, hashedPassword,
+                    username, hashedPassword, defaultPassword,
                     fatherName || null, fatherOccupation || null, fatherContact || null,
                     motherName || null, motherOccupation || null, motherContact || null,
                     guardianName || null, guardianContact || null,
@@ -900,8 +900,8 @@ app.post('/api/admin/confirm/:id', async (req, res) => {
 
             await new Promise((resolve, reject) => {
                 db.query(
-                    'UPDATE students SET student_id = ?, password = ?, is_first_login = TRUE WHERE id = ?',
-                    [studentId, hashedPassword, student.id],
+                    'UPDATE students SET student_id = ?, password = ?, initial_password = ?, is_first_login = TRUE WHERE id = ?',
+                    [studentId, hashedPassword, defaultPassword, student.id],
                     (err) => {
                         if (err) reject(err);
                         else resolve();
@@ -1149,11 +1149,11 @@ app.post('/api/admin/registrars', async (req, res) => {
                 const hashedPassword = await bcrypt.hash(password, 10);
 
                 const insertQuery = `
-                    INSERT INTO registrars (employee_id, first_name, last_name, username, password, email, department, is_first_login)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, TRUE)
+                    INSERT INTO registrars (employee_id, first_name, last_name, username, password, initial_password, email, department, is_first_login)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)
                 `;
 
-                db.query(insertQuery, [employeeId, firstName, lastName, username, hashedPassword, email, department || null], (err, result) => {
+                db.query(insertQuery, [employeeId, firstName, lastName, username, hashedPassword, password, email, department || null], (err, result) => {
                     if (err) return res.status(500).json({ error: err.message });
                     res.status(201).json({ 
                         success: true, 
@@ -1276,7 +1276,7 @@ app.post('/api/student/change-password', async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-        const updateQuery = `UPDATE students SET password = ?, is_first_login = FALSE WHERE id = ?`;
+        const updateQuery = `UPDATE students SET password = ?, initial_password = NULL, is_first_login = FALSE WHERE id = ?`;
         db.query(updateQuery, [hashedPassword, userId], (err) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ success: true, message: 'Password changed successfully!' });
@@ -1420,8 +1420,8 @@ app.post('/api/admin/generate-temp-password', async (req, res) => {
     const tempPassword = Math.random().toString(36).slice(-8);
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-    const query = `UPDATE students SET password = ?, is_first_login = TRUE WHERE id = ?`;
-    db.query(query, [hashedPassword, studentId], (err) => {
+    const query = `UPDATE students SET password = ?, initial_password = ?, is_first_login = TRUE WHERE id = ?`;
+    db.query(query, [hashedPassword, tempPassword, studentId], (err) => {
         if (err) {
             console.error('❌ Error generating temp password:', err);
             return res.status(500).json({ error: 'Failed to generate temporary password' });
@@ -1650,7 +1650,7 @@ app.post('/api/change-password', async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-        const updateQuery = `UPDATE ${tableName} SET password = ?, is_first_login = FALSE WHERE id = ?`;
+        const updateQuery = `UPDATE ${tableName} SET password = ?, initial_password = NULL, is_first_login = FALSE WHERE id = ?`;
         db.query(updateQuery, [hashedPassword, userId], (err) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ success: true, message: 'Password changed successfully!' });
@@ -3893,6 +3893,7 @@ app.get('/api/admin/users', (req, res) => {
             student_id AS public_id,
             username,
             password AS password_hash,
+            initial_password,
             CONCAT(first_name, ' ', COALESCE(middle_name, ''), ' ', last_name) AS full_name,
             email,
             current_grade_level AS extra_info,
@@ -3909,6 +3910,7 @@ app.get('/api/admin/users', (req, res) => {
             employee_id AS public_id,
             username,
             password AS password_hash,
+            initial_password,
             CONCAT(first_name, ' ', last_name) AS full_name,
             email,
             department AS extra_info,
@@ -3924,6 +3926,7 @@ app.get('/api/admin/users', (req, res) => {
             employee_id AS public_id,
             username,
             password AS password_hash,
+            initial_password,
             CONCAT(first_name, ' ', last_name) AS full_name,
             email,
             position AS extra_info,
@@ -3959,8 +3962,8 @@ app.post('/api/admin/users/:role/:id/reset-password', async (req, res) => {
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
         
         db.query(
-            `UPDATE ${tableName} SET password = ?, is_first_login = TRUE WHERE id = ?`,
-            [hashedPassword, id],
+            `UPDATE ${tableName} SET password = ?, initial_password = ?, is_first_login = TRUE WHERE id = ?`,
+            [hashedPassword, tempPassword, id],
             (err, result) => {
                 if (err) return res.status(500).json({ error: err.message });
                 if (result.affectedRows === 0) {
